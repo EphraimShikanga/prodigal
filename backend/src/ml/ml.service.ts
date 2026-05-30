@@ -23,6 +23,30 @@ export interface MatchResult {
   matches: MatchItem[];
 }
 
+export interface KnownFace {
+  name: string;
+  confidence: number;
+}
+
+export interface ImageMatch {
+  person: string;
+  similarity: number;
+}
+
+/** Result of the ML image-verification pipeline (/api/images). */
+export interface ImageVerificationResult {
+  success: boolean;
+  image_id: string | null;
+  image_exists: boolean;
+  duplicate_image: boolean;
+  duplicate_probability: number;
+  faces_detected: number;
+  known_faces: KnownFace[];
+  unknown_faces: number;
+  matches: ImageMatch[];
+  gemini_summary: string;
+}
+
 /**
  * Client for the ARGUS-KE ML service (FastAPI face-recognition microservice).
  *
@@ -114,5 +138,61 @@ export class MlService {
     } catch {
       return false;
     }
+  }
+
+  // --- Image-verification API (ML /api/images) -----------------------------
+
+  /**
+   * Verify an uploaded image: duplicate detection, face recognition against
+   * known persons, and a Gemini natural-language summary.
+   */
+  async verifyImage(
+    photoUrl: string,
+    personName?: string,
+  ): Promise<ImageVerificationResult> {
+    const image = await this.fetchImage(photoUrl);
+    const form = new FormData();
+    form.append('file', image, 'upload.jpg');
+    if (personName) form.append('person_name', personName);
+
+    const res = await fetch(`${this.baseUrl}/api/images/upload`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!res.ok) {
+      throw new Error(`ML image verify failed (${res.status}): ${await res.text()}`);
+    }
+    return (await res.json()) as ImageVerificationResult;
+  }
+
+  /** Enroll a known person from an image so future uploads can recognise them. */
+  async enrollPerson(
+    photoUrl: string,
+    name: string,
+  ): Promise<ImageVerificationResult> {
+    const image = await this.fetchImage(photoUrl);
+    const form = new FormData();
+    form.append('file', image, 'person.jpg');
+    form.append('name', name);
+
+    const res = await fetch(`${this.baseUrl}/api/images/persons`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!res.ok) {
+      throw new Error(`ML person enroll failed (${res.status}): ${await res.text()}`);
+    }
+    return (await res.json()) as ImageVerificationResult;
+  }
+
+  /** Fetch a stored image's details, detected faces, matches and summary. */
+  async searchImage(imageId: string): Promise<Record<string, unknown>> {
+    const res = await fetch(
+      `${this.baseUrl}/api/images/search/${encodeURIComponent(imageId)}`,
+    );
+    if (!res.ok) {
+      throw new Error(`ML image search failed (${res.status}): ${await res.text()}`);
+    }
+    return (await res.json()) as Record<string, unknown>;
   }
 }
