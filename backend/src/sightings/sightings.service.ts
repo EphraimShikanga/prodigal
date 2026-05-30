@@ -55,6 +55,7 @@ export class SightingsService {
         longitude: dto.longitude,
         location_description: dto.location_description,
         photo_url: dto.photo_url,
+        audio_url: dto.audio_url || null,
         reporter_name: dto.reporter_name || null,
         reporter_phone: dto.reporter_phone || null,
         status: 'PENDING',

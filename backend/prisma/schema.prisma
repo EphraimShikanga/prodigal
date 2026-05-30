@@ -78,6 +78,7 @@ model Sighting {
   longitude            Float
   location_description String   @db.Text
   photo_url            String   @db.Text
+  audio_url            String?  @db.Text
   reporter_name        String?  @db.VarChar(150) // null if anonymous
   reporter_phone       String?  @db.VarChar(50)  // null if anonymous
   status               String   @default("PENDING") @db.VarChar(20) // PENDING, VERIFIED

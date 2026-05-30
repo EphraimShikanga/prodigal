@@ -39,4 +39,8 @@ export class SubmitSightingDto {
   @IsString()
   @IsOptional()
   reporter_phone?: string;
+
+  @IsUrl()
+  @IsOptional()
+  audio_url?: string;
 }
