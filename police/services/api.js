@@ -73,6 +73,46 @@ class ApiService {
       body: JSON.stringify(caseData),
     });
   }
+
+  /**
+   * Get pending mobile alerts for police verification
+   */
+  async getPendingAlerts() {
+    return this.request('/alerts/pending');
+  }
+
+  /**
+   * Verify a mobile alert
+   */
+  async verifyAlert(id) {
+    return this.request(`/alerts/${id}/verify`, {
+      method: 'PATCH',
+    });
+  }
+
+  /**
+   * Get public alerts (verified mobile reports)
+   */
+  async getPublicAlerts() {
+    return this.request('/alerts/public');
+  }
+
+  /**
+   * Get found/resolved cases
+   */
+  async getFoundCases() {
+    return this.request('/alerts/found');
+  }
+
+  /**
+   * Create a mobile alert
+   */
+  async createMobileAlert(alertData) {
+    return this.request('/alerts/mobile', {
+      method: 'POST',
+      body: JSON.stringify(alertData),
+    });
+  }
 }
 
 export const apiService = new ApiService(API_BASE_URL);
