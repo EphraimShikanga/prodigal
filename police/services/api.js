@@ -107,11 +107,47 @@ class ApiService {
   /**
    * Create a mobile alert
    */
-  async createMobileAlert(alertData) {
-    return this.request('/alerts/mobile', {
-      method: 'POST',
-      body: JSON.stringify(alertData),
-    });
+  async createMobileAlert(alertData, photoFile = null) {
+    if (photoFile) {
+      // Use multipart/form-data when a file is provided
+      const formData = new FormData();
+      
+      // Add the file
+      formData.append('photo', photoFile);
+      
+      // Add all other fields
+      Object.keys(alertData).forEach(key => {
+        if (alertData[key] !== undefined && alertData[key] !== null) {
+          formData.append(key, alertData[key]);
+        }
+      });
+
+      const url = `${this.baseUrl}/alerts/mobile`;
+      const config = {
+        method: 'POST',
+        body: formData,
+        // Don't set Content-Type header when using FormData - browser will set it with boundary
+      };
+
+      try {
+        const response = await fetch(url, config);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return await response.json();
+      } catch (error) {
+        console.error('API request failed:', error);
+        throw error;
+      }
+    } else {
+      // Use JSON when no file is provided
+      return this.request('/alerts/mobile', {
+        method: 'POST',
+        body: JSON.stringify(alertData),
+      });
+    }
   }
 }
 

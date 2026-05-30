@@ -16,6 +16,7 @@ const AlertsPage = () => {
     gender: '',
     description: '',
     photoUrl: '',
+    photoFile: null,
     obNumber: '',
     reporterName: '',
     reporterPhone: '',
@@ -80,18 +81,19 @@ const AlertsPage = () => {
         age: parseInt(formData.age),
         gender: formData.gender,
         description: formData.description,
-        photo_url: formData.photoUrl,
-        ob_number: formData.obNumber || undefined,
-        reporter_name: formData.reporterName || undefined,
-        reporter_phone: formData.reporterPhone || undefined,
+        photo_url: formData.photoUrl || undefined,
+        reporter_name: formData.reporterName || 'Unknown',
+        reporter_phone: formData.reporterPhone || '0000000000',
         reporter_email: formData.reporterEmail || undefined,
-        reporter_relationship: formData.reporterRelationship || undefined,
+        reporter_relationship: formData.reporterRelationship || 'Unknown',
         last_seen_location: formData.lastSeenLocation,
+        last_seen_lat: -1.286389, // Default Nairobi coordinates
+        last_seen_lng: 36.817223,
         last_seen_time: new Date(formData.lastSeenTime).toISOString(),
         source: 'police',
       };
 
-      await apiService.createMobileAlert(alertData);
+      await apiService.createMobileAlert(alertData, formData.photoFile);
       setPostSuccess(true);
       setFormData({
         childName: '',
@@ -99,6 +101,7 @@ const AlertsPage = () => {
         gender: '',
         description: '',
         photoUrl: '',
+        photoFile: null,
         obNumber: '',
         reporterName: '',
         reporterPhone: '',
@@ -124,6 +127,17 @@ const AlertsPage = () => {
       ...formData,
       [e.target.name]: e.target.value,
     });
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData({
+        ...formData,
+        photoFile: file,
+        photoUrl: '', // Clear URL when file is selected
+      });
+    }
   };
 
   return (
@@ -304,15 +318,32 @@ const AlertsPage = () => {
                     />
                   </div>
                   <div>
-                    <label className="block font-label-caps text-label-caps text-outline mb-2">Photo URL *</label>
-                    <input
-                      type="url"
-                      name="photoUrl"
-                      value={formData.photoUrl}
-                      onChange={handlePostChange}
-                      required
-                      className="w-full px-4 py-2 bg-surface-container border border-outline-variant rounded text-on-surface focus:outline-none focus:border-primary"
-                    />
+                    <label className="block font-label-caps text-label-caps text-outline mb-2">Photo (Upload or URL)</label>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block font-body-sm text-body-sm text-outline mb-1">Upload Image</label>
+                        <input
+                          type="file"
+                          name="photoFile"
+                          onChange={handleFileChange}
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          className="w-full px-4 py-2 bg-surface-container border border-outline-variant rounded text-on-surface focus:outline-none focus:border-primary"
+                        />
+                      </div>
+                      <div className="text-center font-body-sm text-body-sm text-on-surface-variant">or</div>
+                      <div>
+                        <label className="block font-body-sm text-body-sm text-outline mb-1">Image URL</label>
+                        <input
+                          type="url"
+                          name="photoUrl"
+                          value={formData.photoUrl}
+                          onChange={handlePostChange}
+                          placeholder="https://example.com/photo.jpg"
+                          disabled={formData.photoFile !== null}
+                          className="w-full px-4 py-2 bg-surface-container border border-outline-variant rounded text-on-surface focus:outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
                   </div>
                   <div>
                     <label className="block font-label-caps text-label-caps text-outline mb-2">OB Number</label>
@@ -390,36 +421,6 @@ const AlertsPage = () => {
                       required
                       className="w-full px-4 py-2 bg-surface-container border border-outline-variant rounded text-on-surface focus:outline-none focus:border-primary"
                     />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block font-label-caps text-label-caps text-outline mb-2">Latitude *</label>
-                      <input
-                        type="number"
-                        name="lastSeenLat"
-                        value={formData.lastSeenLat}
-                        onChange={handlePostChange}
-                        required
-                        step="any"
-                        min="-90"
-                        max="90"
-                        className="w-full px-4 py-2 bg-surface-container border border-outline-variant rounded text-on-surface focus:outline-none focus:border-primary"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-label-caps text-label-caps text-outline mb-2">Longitude *</label>
-                      <input
-                        type="number"
-                        name="lastSeenLng"
-                        value={formData.lastSeenLng}
-                        onChange={handlePostChange}
-                        required
-                        step="any"
-                        min="-180"
-                        max="180"
-                        className="w-full px-4 py-2 bg-surface-container border border-outline-variant rounded text-on-surface focus:outline-none focus:border-primary"
-                      />
-                    </div>
                   </div>
                   <div>
                     <label className="block font-label-caps text-label-caps text-outline mb-2">Last Seen Time *</label>
