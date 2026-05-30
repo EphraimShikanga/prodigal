@@ -1,0 +1,101 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Child {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(150)
+  age         Int
+  gender      String   @db.VarChar(20)
+  description String   @db.Text
+  photo_url   String   @db.Text
+  created_at  DateTime @default(now()) @db.Timestamptz
+
+  case        Case?
+
+  @@map("children")
+}
+
+model Reporter {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @db.VarChar(150)
+  phone        String   @db.VarChar(50)
+  email        String?  @db.VarChar(150)
+  relationship String   @db.VarChar(50) // Mother, Father, Guardian, etc.
+  created_at   DateTime @default(now()) @db.Timestamptz
+
+  cases        Case[]
+
+  @@map("reporters")
+}
+
+model PoliceAbstract {
+  id                        String   @id @default(uuid()) @db.Uuid
+  police_ob_number          String   @unique @db.VarChar(50)
+  station_name              String   @db.VarChar(150)
+  officer_id                String   @db.VarChar(50)
+  officer_name              String   @db.VarChar(150)
+  abstract_image_url        String   @db.Text
+  stamp_verification_status String   @default("PENDING") @db.VarChar(20) // PENDING, VERIFIED, INVALID
+  created_at                DateTime @default(now()) @db.Timestamptz
+
+  case                      Case?
+
+  @@map("police_abstracts")
+}
+
+model Case {
+  id                 String   @id @default(uuid()) @db.Uuid
+  child_id           String   @unique @db.Uuid
+  reporter_id        String   @db.Uuid
+  police_abstract_id String   @unique @db.Uuid
+  last_seen_location String   @db.VarChar(255)
+  last_seen_lat      Float
+  last_seen_lng      Float
+  last_seen_time     DateTime @db.Timestamptz
+  status             String   @default("PENDING") @db.VarChar(20) // PENDING, APPROVED, RESOLVED, REJECTED
+  created_at         DateTime @default(now()) @db.Timestamptz
+
+  child              Child          @relation(fields: [child_id], references: [id], onDelete: Cascade)
+  reporter           Reporter       @relation(fields: [reporter_id], references: [id], onDelete: Cascade)
+  police_abstract    PoliceAbstract @relation(fields: [police_abstract_id], references: [id], onDelete: Cascade)
+
+  sightings          Sighting[]
+  amber_alerts       AmberAlert[]
+
+  @@map("cases")
+}
+
+model Sighting {
+  id                   String   @id @default(uuid()) @db.Uuid
+  case_id              String?  @db.Uuid
+  latitude             Float
+  longitude            Float
+  location_description String   @db.Text
+  photo_url            String   @db.Text
+  reporter_name        String?  @db.VarChar(150) // null if anonymous
+  reporter_phone       String?  @db.VarChar(50)  // null if anonymous
+  status               String   @default("PENDING") @db.VarChar(20) // PENDING, VERIFIED
+  created_at           DateTime @default(now()) @db.Timestamptz
+
+  case                 Case?    @relation(fields: [case_id], references: [id], onDelete: SetNull)
+
+  @@map("sightings")
+}
+
+model AmberAlert {
+  id                 String   @id @default(uuid()) @db.Uuid
+  case_id            String   @db.Uuid
+  radius_km          Int      @default(50)
+  message            String   @db.Text
+  dispatch_timestamp DateTime @default(now()) @db.Timestamptz
+
+  case               Case     @relation(fields: [case_id], references: [id], onDelete: Cascade)
+
+  @@map("amber_alerts")
+}
