@@ -15,13 +15,7 @@ const RejectionModal = ({ isOpen, onClose, onConfirm, caseData, clickPosition })
     }
   };
 
-  const modalStyle = clickPosition ? {
-    position: 'fixed',
-    top: `${clickPosition.y}px`,
-    left: `${clickPosition.x}px`,
-    transform: 'translate(-50%, -50%)',
-    zIndex: 200,
-  } : {
+  const modalStyle = {
     position: 'fixed',
     top: '50%',
     left: '50%',
