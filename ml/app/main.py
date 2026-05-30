@@ -33,10 +33,31 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.engine = load_engine(settings)
     app.state.store = load_store(settings)
+
+    # -- image verification subsystem ------------------------------------
+    from models.face_detector import FaceDetector
+    from models.face_recognizer import FaceRecognizer
+    from models.image_verifier import ImageVerifier
+    from services.database_service import load_database
+    from services.embedding_service import load_embedding_service
+    from services.gemini_service import load_gemini_summary
+
+    db = load_database(settings)
+    embedding_service = load_embedding_service(db, app.state.engine, settings)
+    embedding_service.build_index()
+    detector = FaceDetector(app.state.engine)
+    recognizer = FaceRecognizer(app.state.engine, embedding_service, db, settings)
+    gemini = load_gemini_summary(settings)
+    app.state.image_db = db
+    app.state.image_verifier = ImageVerifier(
+        detector, recognizer, embedding_service, db, gemini, settings
+    )
+
     logger.info(
-        "ARGUS-KE ready: engine=%s store=%s",
+        "ARGUS-KE ready: engine=%s store=%s image_db=%s",
         app.state.engine.name,
         app.state.store.name,
+        db.name,
     )
     yield
 
@@ -68,10 +89,13 @@ def create_app() -> FastAPI:
             content=ErrorResponse(detail="Internal server error").model_dump(),
         )
 
+    from api.image_routes import router as image_router
+
     app.include_router(health_router)
     app.include_router(faces_router)
     app.include_router(cases_router)
     app.include_router(match_router)
+    app.include_router(image_router)
 
     return app
 

@@ -11,8 +11,11 @@ import io
 import os
 
 # Force deterministic, dependency-free backends BEFORE importing the app.
+# Clearing ARGUS_DATABASE_URL keeps the tests hermetic (in-memory image DB), even
+# when a developer's .env points at a real Postgres.
 os.environ["ARGUS_ML_BACKEND"] = "stub"
 os.environ["ARGUS_STORE_BACKEND"] = "memory"
+os.environ["ARGUS_DATABASE_URL"] = ""
 
 import numpy as np
 import pytest

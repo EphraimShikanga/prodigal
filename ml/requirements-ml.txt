@@ -1,3 +1,4 @@
+faiss-cpu
 insightface
 onnxruntime
 opencv-python-headless

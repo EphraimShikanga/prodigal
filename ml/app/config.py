@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     database_url: str | None = None
     cors_origins: list[str] = ["*"]
 
+    # --- Face-recognition / image-verification subsystem ---
+    recognition_threshold: float = 0.45   # cosine >= -> same known person
+    similar_threshold: float = 0.30       # cosine >= -> "similar" image
+    duplicate_threshold: float = 0.97     # face-embedding cosine >= -> duplicate
+    phash_duplicate_max_hamming: int = 6  # perceptual-hash hamming <= -> duplicate image
+    image_store_dir: str = "data/images"
+    use_faiss: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="ARGUS_",

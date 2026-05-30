@@ -39,32 +39,31 @@ makes the DB match the Prisma schema exactly, so it **deletes `argus_faces`**.
 Re-apply step 2 after any future `db push`. (`prisma migrate deploy` is additive
 and safe, so prefer migrations once you have them.)
 
-## Setup (local Postgres + pgvector)
+## Setup (NeonDB — serverless Postgres)
 
-The DB is a single Postgres-with-pgvector instance shared by the backend (Prisma
-tables) and the ML service (`argus_faces`). It runs via `backend/docker-compose.yml`
-(image built from `backend/database/Dockerfile` = `pgvector/pgvector:pg16`),
-exposed on host port **1223**.
+One Neon database is shared by the backend (Prisma tables) and the ML service
+(`argus_faces` + `images`/`persons`/`face_embeddings`). Neon supports pgvector.
 
-1. **Start the database**
-   ```
-   cd backend
-   docker compose up -d --build db        # Postgres + pgvector on localhost:1223
-   ```
+1. **Get the connection string:** Neon console → your project → **Connection Details**.
+   - Use the **direct (unpooled)** string for `prisma db push` / migrations.
+   - Keep `?sslmode=require` (Neon requires SSL).
 2. **backend/.env**
    ```
-   DATABASE_URL=postgresql://argus:argus@localhost:1223/argus?schema=public
+   DATABASE_URL=postgresql://<user>:<password>@<endpoint>.<region>.aws.neon.tech/<db>?sslmode=require
    ML_SERVICE_URL=http://localhost:8000
    ```
-3. **ml/.env** (same DB so vectors persist alongside the app data)
+3. **ml/.env** (same connection string so vectors persist alongside the app data)
    ```
-   ARGUS_DATABASE_URL=postgresql://argus:argus@localhost:1223/argus
+   ARGUS_DATABASE_URL=postgresql://<user>:<password>@<endpoint>.<region>.aws.neon.tech/<db>?sslmode=require
    ARGUS_STORE_BACKEND=auto      # uses pgvector when ARGUS_DATABASE_URL is set
    ```
-4. **Create tables** (order matters — see gotcha above)
+4. **Enable pgvector + create tables** (order matters — see gotcha above)
    ```
    cd backend && npx prisma db push
-   docker exec -i backend-db-1 psql -U argus -d argus < ../ml/app/db/schema.sql
+   # then run, in the Neon SQL editor (or via psql to the Neon URL):
+   #   the contents of  ml/app/db/schema.sql         (argus_faces)
+   #   the contents of  ml/app/db/images_schema.sql  (images/persons/face_embeddings)
+   # both files begin with CREATE EXTENSION IF NOT EXISTS vector;
    ```
 5. **Run** (two terminals)
    ```
@@ -72,9 +71,10 @@ exposed on host port **1223**.
    cd backend && npm run start:dev
    ```
 
-> To use a managed Postgres instead (e.g. Supabase/Neon/RDS), just set
-> `DATABASE_URL` / `ARGUS_DATABASE_URL` to that server's connection string
-> (managed Postgres usually needs `?sslmode=require`). No code changes.
+> Nothing in the code is Neon-specific — it's standard Postgres via psycopg
+> (ML) and Prisma (backend). Any Postgres+pgvector works by changing only the
+> connection string. Neon tip: the compute auto-suspends when idle, so the first
+> request after a pause has a short cold-start.
 
 ## Verified flow (what the e2e test exercised)
 
