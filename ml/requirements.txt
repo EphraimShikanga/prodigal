@@ -7,3 +7,5 @@ numpy
 pillow
 httpx
 pytest
+# Gemini backend (ml_backend=gemini): detect-and-describe + text embeddings.
+google-genai

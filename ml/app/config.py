@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     version: str = "0.1.0"
     api_prefix: str = "/api/v1"
 
-    ml_backend: str = "auto"          # auto|insightface|stub
+    ml_backend: str = "auto"          # auto|gemini|insightface|stub
     store_backend: str = "auto"       # auto|pgvector|memory
 
     embedding_dim: int = 512
@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     match_top_k: int = 5
     min_det_score: float = 0.5
     max_image_mb: int = 10
+
+    # --- Gemini backend (ml_backend=gemini) ---
+    # Key resolution order: ARGUS_GEMINI_API_KEY, then GEMINI_API_KEY / GOOGLE_API_KEY.
+    gemini_api_key: str | None = None
+    gemini_vision_model: str = "gemini-2.0-flash"
+    gemini_embed_model: str = "gemini-embedding-001"
 
     database_url: str | None = None
     cors_origins: list[str] = ["*"]

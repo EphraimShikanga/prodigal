@@ -33,13 +33,17 @@ class Face:
         bbox: ``(x1, y1, x2, y2)`` pixel coordinates.
         det_score: Detector confidence in ``[0, 1]``.
         landmarks: Optional list of ``[x, y]`` keypoints.
-        embedding: Optional L2-normalized 512-d embedding.
+        embedding: Optional L2-normalized embedding.
+        attributes: Optional structured description of the person (used by the
+            Gemini backend, which matches on a text description rather than a
+            biometric face vector). Stored in case metadata at enrollment.
     """
 
     bbox: tuple[float, float, float, float]
     det_score: float
     landmarks: list[list[float]] | None = None
     embedding: np.ndarray | None = None
+    attributes: dict | None = None
 
 
 class FaceEngine(ABC):
@@ -173,21 +177,216 @@ class InsightFaceEngine(FaceEngine):
         return faces
 
 
+# Field order used to build the canonical description text that gets embedded.
+# Keeping it fixed makes the embedding stable for a given description.
+_DESCRIPTION_FIELDS = (
+    "apparent_age_range",
+    "sex_presentation",
+    "skin_tone",
+    "hair",
+    "facial_features",
+    "clothing",
+    "accessories",
+    "distinguishing_marks",
+)
+
+_VISION_PROMPT = (
+    "You are a careful forensic image analyst helping reunite missing children "
+    "with their families. Analyse the image and return STRICT JSON only, no prose.\n"
+    'Schema: {"faces": [{"box_2d": [ymin, xmin, ymax, xmax], "confidence": <0..1>, '
+    '"description": {' + ", ".join(f'"{k}": "<short text or empty>"' for k in _DESCRIPTION_FIELDS) + "}}]}\n"
+    "box_2d uses integer coordinates normalised to 0-1000 (origin at the top-left). "
+    "Include one entry per visible human face, most prominent first. "
+    "Describe only what is visible; use an empty string when unsure. "
+    'If there are no human faces, return {"faces": []}.'
+)
+
+
+class GeminiFaceEngine(FaceEngine):
+    """Face engine backed by the Google Gemini API.
+
+    Gemini does not provide biometric face-identity vectors, so this engine:
+
+    * **detects** faces (and their bounding boxes) with a Gemini vision model, and
+    * **embeds** a *structured textual description* of each face produced by the
+      vision model, using a Gemini text-embedding model.
+
+    Matching therefore finds people whose *descriptions* are similar, not a
+    biometric same-person guarantee. The ``google-genai`` SDK is imported lazily.
+    """
+
+    name = "gemini"
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        vision_model: str = "gemini-2.0-flash",
+        embed_model: str = "gemini-embedding-001",
+        embedding_dim: int = 512,
+        client=None,
+    ) -> None:
+        self._vision_model = vision_model
+        self._embed_model = embed_model
+        self._embedding_dim = embedding_dim
+        if client is None:
+            from google import genai  # lazy import
+
+            if not api_key:
+                raise ValueError("Gemini API key is required for GeminiFaceEngine.")
+            client = genai.Client(api_key=api_key)
+        self._client = client
+        self.loaded = True
+
+    @staticmethod
+    def _to_png_bytes(image: np.ndarray) -> bytes:
+        from io import BytesIO
+
+        from PIL import Image
+
+        buf = BytesIO()
+        Image.fromarray(np.asarray(image, dtype=np.uint8)).save(buf, format="PNG")
+        return buf.getvalue()
+
+    @staticmethod
+    def _parse_json(text: str) -> dict:
+        """Parse model JSON output, tolerating ```json fences."""
+        import json
+
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("```", 2)[1]
+            if cleaned.lstrip().startswith("json"):
+                cleaned = cleaned.lstrip()[4:]
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            logger.warning("Gemini returned non-JSON vision output; treating as no faces.")
+            return {"faces": []}
+
+    def _analyze(self, image: np.ndarray) -> list[Face]:
+        """Run one Gemini vision call and return detected faces with attributes."""
+        from google.genai import types  # lazy import
+
+        h, w = image.shape[0], image.shape[1]
+        png = self._to_png_bytes(image)
+        response = self._client.models.generate_content(
+            model=self._vision_model,
+            contents=[
+                types.Part.from_bytes(data=png, mime_type="image/png"),
+                _VISION_PROMPT,
+            ],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.0,
+            ),
+        )
+        parsed = self._parse_json(response.text or "")
+        faces: list[Face] = []
+        for item in parsed.get("faces", []):
+            box = item.get("box_2d") or [0, 0, 1000, 1000]
+            ymin, xmin, ymax, xmax = (float(v) for v in box)
+            bbox = (
+                xmin / 1000.0 * w,
+                ymin / 1000.0 * h,
+                xmax / 1000.0 * w,
+                ymax / 1000.0 * h,
+            )
+            try:
+                score = float(item.get("confidence", 0.9))
+            except (TypeError, ValueError):
+                score = 0.9
+            desc = item.get("description") or {}
+            attributes = {k: str(desc.get(k, "")) for k in _DESCRIPTION_FIELDS}
+            faces.append(
+                Face(bbox=bbox, det_score=score, landmarks=None, attributes=attributes)
+            )
+        return faces
+
+    def detect(self, image: np.ndarray) -> list[Face]:
+        """Detect faces using a Gemini vision model."""
+        return self._analyze(image)
+
+    def _embed_text(self, text: str) -> np.ndarray:
+        from google.genai import types  # lazy import
+
+        result = self._client.models.embed_content(
+            model=self._embed_model,
+            contents=text,
+            config=types.EmbedContentConfig(
+                task_type="SEMANTIC_SIMILARITY",
+                output_dimensionality=self._embedding_dim,
+            ),
+        )
+        values = result.embeddings[0].values
+        return l2_normalize(np.asarray(values, dtype=np.float64))
+
+    @staticmethod
+    def _description_text(attributes: dict | None) -> str:
+        """Build a stable canonical description string from attributes."""
+        attributes = attributes or {}
+        parts = [
+            f"{k.replace('_', ' ')}: {attributes.get(k, '')}".strip()
+            for k in _DESCRIPTION_FIELDS
+        ]
+        return "; ".join(p for p in parts if not p.endswith(":"))
+
+    def embed(self, image: np.ndarray) -> list[Face]:
+        """Detect faces and attach embeddings of their textual descriptions."""
+        faces = self._analyze(image)
+        for face in faces:
+            text = self._description_text(face.attributes)
+            face.embedding = self._embed_text(text)
+        return faces
+
+
+def _resolve_gemini_api_key(settings) -> str | None:
+    """Find a Gemini API key from settings or common env vars."""
+    import os
+
+    return (
+        getattr(settings, "gemini_api_key", None)
+        or os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY")
+    )
+
+
 def load_engine(settings) -> FaceEngine:
     """Construct the face engine selected by ``settings.ml_backend``.
 
-    For ``"auto"``, InsightFace is attempted first and the stub is used on any
-    import/load error (a warning is logged).
+    * ``stub``        -> deterministic, dependency-free engine.
+    * ``gemini``      -> Gemini detect-and-describe engine (requires an API key).
+    * ``insightface`` -> the real biometric ArcFace model.
+    * ``auto``        -> Gemini if an API key is configured, else InsightFace,
+      else the stub. Any load error falls back to the stub (a warning is logged).
     """
     backend = settings.ml_backend
 
     if backend == "stub":
         return StubFaceEngine(embedding_dim=settings.embedding_dim)
 
+    if backend == "gemini":
+        return GeminiFaceEngine(
+            api_key=_resolve_gemini_api_key(settings),
+            vision_model=settings.gemini_vision_model,
+            embed_model=settings.gemini_embed_model,
+            embedding_dim=settings.embedding_dim,
+        )
+
     if backend == "insightface":
         return InsightFaceEngine()
 
     # auto
+    api_key = _resolve_gemini_api_key(settings)
+    if api_key:
+        try:
+            return GeminiFaceEngine(
+                api_key=api_key,
+                vision_model=settings.gemini_vision_model,
+                embed_model=settings.gemini_embed_model,
+                embedding_dim=settings.embedding_dim,
+            )
+        except Exception as exc:  # pragma: no cover - depends on optional deps
+            logger.warning("Gemini unavailable (%s); trying next backend.", exc)
     try:
         return InsightFaceEngine()
     except Exception as exc:  # pragma: no cover - depends on optional deps

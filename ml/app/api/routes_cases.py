@@ -110,6 +110,11 @@ async def enroll_case(
     faces = engine.embed(image)
     face = _best_face(faces)
 
+    # Backends that produce a textual description (e.g. Gemini) attach it to the
+    # face; persist it in metadata so matches can show why two cases are similar.
+    if face.attributes:
+        metadata_val = {**(metadata_val or {}), "description": face.attributes}
+
     face_id = str(uuid.uuid4())
     record = FaceRecord(
         face_id=face_id,
