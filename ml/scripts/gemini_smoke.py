@@ -17,6 +17,10 @@ the embedding dimensionality.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+# Allow running as `python scripts/gemini_smoke.py` from the ml/ directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import get_settings
 from app.services.face_engine import load_engine

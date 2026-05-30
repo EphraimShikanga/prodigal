@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
+import { MlModule } from './ml/ml.module';
 import { CasesModule } from './cases/cases.module';
 import { SightingsModule } from './sightings/sightings.module';
 import { AlertsModule } from './alerts/alerts.module';
@@ -12,6 +13,7 @@ import { AlertsModule } from './alerts/alerts.module';
       envFilePath: '.env',
     }),
     PrismaModule,
+    MlModule,
     CasesModule,
     SightingsModule,
     AlertsModule,

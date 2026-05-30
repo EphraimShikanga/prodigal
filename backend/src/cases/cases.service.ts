@@ -1,11 +1,22 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MlService } from '../ml/ml.service';
 import { CreateCaseDto } from './dto/create-case.dto';
 import { UpdateCaseStatusDto } from './dto/update-case-status.dto';
 
 @Injectable()
 export class CasesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(CasesService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ml: MlService,
+  ) {}
 
   async create(dto: CreateCaseDto) {
     // Check if OB number already exists
@@ -151,6 +162,26 @@ export class CasesService {
       console.log(`Target coordinates: Lat ${record.last_seen_lat}, Lng ${record.last_seen_lng}`);
       console.log(`Message: "${alertMsg}"`);
       console.log(`======================================================\n`);
+
+      // Enroll the child's face into the ML recognition index (best-effort:
+      // a failure here must not block case approval / the Amber Alert).
+      try {
+        const enrollment = await this.ml.enrollCase({
+          caseId: id,
+          obNumber: record.police_abstract.police_ob_number,
+          photoUrl: record.child.photo_url,
+          metadata: {
+            child_name: record.child.name,
+            age: record.child.age,
+            gender: record.child.gender,
+          },
+        });
+        this.logger.log(
+          `Enrolled case ${id} into ML index as face ${enrollment.face_id}`,
+        );
+      } catch (err) {
+        this.logger.error(`ML enrollment failed for case ${id}: ${err}`);
+      }
     }
 
     return updated;

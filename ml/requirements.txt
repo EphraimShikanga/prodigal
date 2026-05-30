@@ -9,3 +9,6 @@ httpx
 pytest
 # Gemini backend (ml_backend=gemini): detect-and-describe + text embeddings.
 google-genai
+# Supabase / Postgres vector store (store_backend=pgvector).
+psycopg[binary]
+pgvector

@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # --- Gemini backend (ml_backend=gemini) ---
     # Key resolution order: ARGUS_GEMINI_API_KEY, then GEMINI_API_KEY / GOOGLE_API_KEY.
     gemini_api_key: str | None = None
-    gemini_vision_model: str = "gemini-2.0-flash"
+    gemini_vision_model: str = "gemini-2.5-flash"
     gemini_embed_model: str = "gemini-embedding-001"
 
     database_url: str | None = None
