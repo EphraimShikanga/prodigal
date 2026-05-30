@@ -1,17 +1,10 @@
 import 'package:flutter/material.dart';
 import '../theme/tactical_theme.dart';
 import '../widgets/amber_alert_card.dart';
-import '../widgets/quick_actions.dart';
 import '../widgets/recent_sightings.dart';
-import '../widgets/verification_matrix.dart';
 
 class DashboardScreen extends StatelessWidget {
-  final VoidCallback? onFileReportTap;
-
-  const DashboardScreen({
-    super.key,
-    this.onFileReportTap,
-  });
+  const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -96,32 +89,14 @@ class DashboardScreen extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+            children: const [
               // 1. HERO AMBER ALERT CARD
-              const AmberAlertCard(),
-              const SizedBox(height: 20),
+              AmberAlertCard(),
+              SizedBox(height: 20),
 
-              // 2. QUICK ACTIONS
-              QuickActions(
-                onScanTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('AI Camera scanner launching...'),
-                      backgroundColor: TacticalTheme.surfaceContainer,
-                    ),
-                  );
-                },
-                onFileReportTap: onFileReportTap ?? () {},
-              ),
-              const SizedBox(height: 20),
-
-              // 3. SIGHTINGS FEED
-              const RecentSightingsFeed(),
-              const SizedBox(height: 20),
-
-              // 4. METRICS / STATS
-              const VerificationMatrix(),
-              const SizedBox(height: 24),
+              // 2. SIGHTINGS FEED
+              RecentSightingsFeed(),
+              SizedBox(height: 24),
             ],
           ),
         ),

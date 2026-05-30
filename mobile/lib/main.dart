@@ -39,9 +39,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   void initState() {
     super.initState();
     _screens = [
-      DashboardScreen(
-        onFileReportTap: () => _onTabTapped(2),
-      ),
+      const DashboardScreen(),
       const RadarPlaceholder(),
       ReportMissingScreen(
         onBackToHome: () => _onTabTapped(0),

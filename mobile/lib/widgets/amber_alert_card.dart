@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/tactical_theme.dart';
+import '../screens/report_sighting_screen.dart';
 
 class AmberAlertCard extends StatefulWidget {
   const AmberAlertCard({super.key});
@@ -290,31 +291,30 @@ class _AmberAlertCardState extends State<AmberAlertCard>
                 ),
                 const SizedBox(height: 16),
 
-                // Initiate Drone Swarm Button
+                // Report Sighting Button
                 SizedBox(
                   width: double.infinity,
                   height: 40,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: TacticalTheme.primary,
-                      foregroundColor: TacticalTheme.onPrimary,
+                      backgroundColor: TacticalTheme.secondaryContainer,
+                      foregroundColor: TacticalTheme.onSecondary,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(2),
                       ),
                       elevation: 4,
-                      shadowColor: TacticalTheme.primary.withOpacity(0.3),
+                      shadowColor: TacticalTheme.secondaryContainer.withOpacity(0.3),
                     ),
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Drone swarm scan initialized over coordinates.'),
-                          backgroundColor: TacticalTheme.surfaceContainer,
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const ReportSightingScreen(),
                         ),
                       );
                     },
-                    icon: const Icon(Icons.gps_fixed, size: 16),
+                    icon: const Icon(Icons.add_location_alt, size: 16),
                     label: const Text(
-                      'INITIATE DRONE SWARM',
+                      'REPORT SIGHTING',
                       style: TextStyle(
                         fontFamily: 'JetBrains Mono',
                         fontSize: 12,
