@@ -1,12 +1,26 @@
 import React from 'react';
 
-const SearchFilters = ({ searchTerm, setSearchTerm, statusFilter, setStatusFilter }) => {
+const SearchFilters = ({ searchTerm, setSearchTerm, statusFilter, setStatusFilter, regionFilter, setRegionFilter }) => {
   const statuses = [
     { value: 'all', label: 'ALL' },
     { value: 'pending', label: 'PENDING' },
     { value: 'verified', label: 'VERIFIED' },
     { value: 'found', label: 'FOUND' },
     { value: 'rejected', label: 'REJECTED' },
+  ];
+
+  const regions = [
+    { value: 'all', label: 'ALL REGIONS' },
+    { value: 'nairobi', label: 'Nairobi' },
+    { value: 'mombasa', label: 'Mombasa' },
+    { value: 'kisumu', label: 'Kisumu' },
+    { value: 'nakuru', label: 'Nakuru' },
+    { value: 'eldoret', label: 'Eldoret' },
+    { value: 'naivasha', label: 'Naivasha' },
+    { value: 'thika', label: 'Thika' },
+    { value: 'malindi', label: 'Malindi' },
+    { value: 'kitale', label: 'Kitale' },
+    { value: 'garissa', label: 'Garissa' },
   ];
 
   return (
@@ -37,6 +51,19 @@ const SearchFilters = ({ searchTerm, setSearchTerm, statusFilter, setStatusFilte
             className="w-full bg-surface-container-lowest border border-outline-variant rounded-DEFAULT py-2 pl-9 pr-3 font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all"
             placeholder="Search OB Number or Name..."
           />
+        </div>
+        
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <span className="material-symbols-outlined text-outline">location_on</span>
+          <select 
+            value={regionFilter}
+            onChange={(e) => setRegionFilter(e.target.value)}
+            className="w-full sm:w-auto bg-surface-container-lowest border border-outline-variant rounded-DEFAULT py-2 px-3 pr-8 font-body-sm text-body-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none appearance-none"
+          >
+            {regions.map(region => (
+              <option key={region.value} value={region.value}>{region.label}</option>
+            ))}
+          </select>
         </div>
         
         <div className="flex items-center gap-2 w-full sm:w-auto">

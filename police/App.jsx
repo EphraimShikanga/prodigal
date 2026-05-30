@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import StatsCards from './components/StatsCards';
 import CaseCard from './components/CaseCard';
@@ -14,14 +13,14 @@ const App = () => {
   const [filteredCases, setFilteredCases] = useState(mockCases);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [regionFilter, setRegionFilter] = useState('all');
   const [selectedCase, setSelectedCase] = useState(null);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [actionCase, setActionCase] = useState(null);
-  const [currentView, setCurrentView] = useState('dashboard');
 
-  // Filter cases based on search and status
+  // Filter cases based on search, status, and region
   useEffect(() => {
     let filtered = [...cases];
     
@@ -36,8 +35,12 @@ const App = () => {
       filtered = filtered.filter(c => c.status.toLowerCase() === statusFilter.toLowerCase());
     }
     
+    if (regionFilter !== 'all') {
+      filtered = filtered.filter(c => c.region === regionFilter);
+    }
+    
     setFilteredCases(filtered);
-  }, [cases, searchTerm, statusFilter]);
+  }, [cases, searchTerm, statusFilter, regionFilter]);
 
   const handleVerify = (caseData) => {
     setActionCase(caseData);
@@ -134,8 +137,7 @@ const App = () => {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <div className="flex-1 md:ml-sidebar-width pb-20 md:pb-0">
+      <div className="flex-1 pb-20 md:pb-0">
         <TopBar />
         <main className="p-margin-mobile md:p-gutter max-w-7xl mx-auto w-full">
           {/* System Overview Header */}
@@ -273,6 +275,8 @@ const App = () => {
             setSearchTerm={setSearchTerm}
             statusFilter={statusFilter}
             setStatusFilter={setStatusFilter}
+            regionFilter={regionFilter}
+            setRegionFilter={setRegionFilter}
           />
 
           {/* Cases Grid */}
