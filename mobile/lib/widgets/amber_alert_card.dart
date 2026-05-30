@@ -2,36 +2,8 @@ import 'package:flutter/material.dart';
 import '../theme/tactical_theme.dart';
 import '../screens/report_sighting_screen.dart';
 
-class AmberAlertCard extends StatefulWidget {
+class AmberAlertCard extends StatelessWidget {
   const AmberAlertCard({super.key});
-
-  @override
-  State<AmberAlertCard> createState() => _AmberAlertCardState();
-}
-
-class _AmberAlertCardState extends State<AmberAlertCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _scanController;
-  late Animation<double> _scanAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _scanController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat(reverse: true);
-
-    _scanAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _scanController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _scanController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +91,7 @@ class _AmberAlertCardState extends State<AmberAlertCard>
                     ),
                     const SizedBox(width: 12),
 
-                    // Grayscale Scanning Image Component
+                    // Grayscale Image Component
                     Expanded(
                       flex: 2,
                       child: AspectRatio(
@@ -151,28 +123,6 @@ class _AmberAlertCardState extends State<AmberAlertCard>
                                     );
                                   },
                                 ),
-                              ),
-                              // Scanning Overlay Line
-                              AnimatedBuilder(
-                                animation: _scanAnimation,
-                                builder: (context, child) {
-                                  return Align(
-                                    alignment: Alignment(0.0, (_scanAnimation.value * 2.0) - 1.0),
-                                    child: Container(
-                                      height: 2,
-                                      decoration: BoxDecoration(
-                                        color: TacticalTheme.primary,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: TacticalTheme.primary.withOpacity(0.8),
-                                            blurRadius: 4,
-                                            spreadRadius: 1,
-                                          )
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
                               ),
                               // Small bottom info Overlay
                               Positioned(

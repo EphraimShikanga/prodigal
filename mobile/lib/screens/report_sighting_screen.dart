@@ -33,14 +33,18 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
   final double _autoLng = 36.8583;
   late final DateTime _autoTime;
 
+  // Map Picker State (Past Sighting Mode)
+  Offset _mapPinOffset = const Offset(150, 100); // Default pin in center of mock map container
+  bool _mapTapped = false;
+
   @override
   void initState() {
     super.initState();
     _autoTime = DateTime.now();
     _timeController.text = _formatDateTime(_autoTime);
-    _latController.text = _autoLat.toString();
-    _lngController.text = _autoLng.toString();
-    _locationNameController.text = "Nairobi National Park Perimeter";
+    _latController.text = "-1.2825"; // Default manual lat
+    _lngController.text = "36.8219"; // Default manual lng
+    _locationNameController.text = "Ngong Road Junction";
   }
 
   @override
@@ -61,7 +65,6 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
 
   void _toggleAudioRecording() {
     if (_isRecordingAudio) {
-      // Stop recording
       _recordTimer?.cancel();
       setState(() {
         _isRecordingAudio = false;
@@ -74,7 +77,6 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
         ),
       );
     } else {
-      // Start recording
       setState(() {
         _isRecordingAudio = true;
         _recordDuration = 0;
@@ -88,16 +90,83 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
     }
   }
 
-  void _submitSighting() {
-    if (_photoFileName == "No file chosen") {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sighting photo is required.'),
-          backgroundColor: TacticalTheme.errorContainer,
-        ),
+  // Pick Date & Time via system pickers
+  Future<void> _pickDateTime() async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: TacticalTheme.primary,
+              onPrimary: TacticalTheme.onPrimary,
+              surface: TacticalTheme.surfaceContainer,
+              onSurface: TacticalTheme.onSurface,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedDate != null && mounted) {
+      final TimeOfDay? pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.now(),
+        builder: (context, child) {
+          return Theme(
+            data: ThemeData.dark().copyWith(
+              colorScheme: const ColorScheme.dark(
+                primary: TacticalTheme.primary,
+                onPrimary: TacticalTheme.onPrimary,
+                surface: TacticalTheme.surfaceContainer,
+                onSurface: TacticalTheme.onSurface,
+              ),
+            ),
+            child: child!,
+          );
+        },
       );
-      return;
+
+      if (pickedTime != null) {
+        final DateTime fullDateTime = DateTime(
+          pickedDate.year,
+          pickedDate.month,
+          pickedDate.day,
+          pickedTime.hour,
+          pickedTime.minute,
+        );
+        setState(() {
+          _timeController.text = _formatDateTime(fullDateTime);
+        });
+      }
     }
+  }
+
+  // Handle map tapping to translate tap position into coordinates
+  void _onMapTapped(TapUpDetails details, Size mapSize) {
+    setState(() {
+      _mapPinOffset = details.localPosition;
+      _mapTapped = true;
+
+      // Translate tap coordinates:
+      // Map width maps to Longitude range: 36.7800 to 36.8600 (Nairobi West to East)
+      // Map height maps to Latitude range: -1.2500 to -1.3100 (Nairobi North to South)
+      final double percentX = _mapPinOffset.dx / mapSize.width;
+      final double percentY = _mapPinOffset.dy / mapSize.height;
+
+      final double mockLng = 36.7800 + (percentX * 0.0800);
+      final double mockLat = -1.2500 - (percentY * 0.0600);
+
+      _latController.text = mockLat.toStringAsFixed(4);
+      _lngController.text = mockLng.toStringAsFixed(4);
+    });
+  }
+
+  void _submitSighting() {
     if (_descriptionController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -112,7 +181,6 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
     final double lng = _isImmediate ? _autoLng : (double.tryParse(_lngController.text) ?? 0.0);
     final String timestamp = _isImmediate ? _autoTime.toIso8601String() : _timeController.text;
 
-    // Show high-fidelity submission dialog
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -142,7 +210,7 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
             const SizedBox(height: 12),
             _buildDialogParam('COORDINATES', '$lat, $lng'),
             _buildDialogParam('TIMESTAMP', timestamp),
-            _buildDialogParam('PHOTO ATTACHED', _photoFileName),
+            _buildDialogParam('PHOTO ATTACHED', _photoFileName == "No file chosen" ? "None (Optional)" : _photoFileName),
             if (_audioFileName != "No file chosen")
               _buildDialogParam('AUDIO NOTE', _audioFileName),
             _buildDialogParam('DESCRIPTION', _descriptionController.text),
@@ -276,7 +344,7 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
                     const SizedBox(height: 20),
 
                     // Media upload sections
-                    _buildLabel('1. SIGHTING PHOTO (REQUIRED)'),
+                    _buildLabel('1. SIGHTING PHOTO (OPTIONAL)'),
                     _buildPhotoUploader(),
                     const SizedBox(height: 20),
 
@@ -464,19 +532,23 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
     );
   }
 
-  // Manual Past Mode inputs
+  // Manual Past Mode inputs with Pickers
   Widget _buildPastManualFields() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Sighting Time input
+        // Sighting Time input with Tap Picker
         _buildLabel('SIGHTING DATE & TIME'),
         TextFormField(
           controller: _timeController,
+          readOnly: true,
+          onTap: _pickDateTime,
           style: const TextStyle(fontFamily: 'JetBrains Mono', fontSize: 13, color: TacticalTheme.onSurface),
-          decoration: _buildInputDecoration('YYYY-MM-DD HH:MM:SS'),
+          decoration: _buildInputDecoration('Tap to select date & time').copyWith(
+            suffixIcon: const Icon(Icons.calendar_month, color: TacticalTheme.primary, size: 20),
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
 
         // Sighting Location Description input
         _buildLabel('LOCATION / CORNER DESCRIPTION'),
@@ -485,47 +557,98 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
           style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: TacticalTheme.onSurface),
           decoration: _buildInputDecoration('e.g. Near Westlands Mall entry gate'),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
 
-        // Coordinates row
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildLabel('LATITUDE'),
-                  TextFormField(
-                    controller: _latController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(fontFamily: 'JetBrains Mono', fontSize: 13, color: TacticalTheme.onSurface),
-                    decoration: _buildInputDecoration('-1.2682'),
-                  ),
-                ],
+        // INTERACTIVE MAP PICKER COMPONENT
+        _buildLabel('SELECT SIGHTING LOCATION (TAP MAP TO PINPOINT)'),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final Size mapSize = Size(constraints.maxWidth, 180);
+            return GestureDetector(
+              onTapUp: (details) => _onMapTapped(details, mapSize),
+              child: Container(
+                width: mapSize.width,
+                height: mapSize.height,
+                decoration: BoxDecoration(
+                  color: TacticalTheme.surfaceLowest,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: TacticalTheme.outlineVariant),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  children: [
+                    // Mock Tactical Radar Map Grid Background
+                    CustomPaint(
+                      size: mapSize,
+                      painter: TacticalMapGridPainter(),
+                    ),
+
+                    // Map Overlay Guidelines
+                    Center(
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: TacticalTheme.primary.withOpacity(0.15), width: 1.0),
+                        ),
+                      ),
+                    ),
+
+                    // Map Text Info Overlay
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        color: Colors.black.withOpacity(0.7),
+                        child: const Text(
+                          'RADAR MAP GRID 36.8°E / 1.2°S',
+                          style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 9, color: TacticalTheme.primary, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+
+                    // Visual Map Crosshair PIN
+                    Positioned(
+                      left: _mapPinOffset.dx - 12,
+                      top: _mapPinOffset.dy - 12,
+                      child: Icon(
+                        Icons.add_location_alt,
+                        color: _mapTapped ? TacticalTheme.secondaryContainer : TacticalTheme.primary.withOpacity(0.5),
+                        size: 24,
+                      ),
+                    ),
+
+                    // Live Coordinates Overlay
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        color: Colors.black.withOpacity(0.7),
+                        child: Text(
+                          'PIN COORDS: ${_latController.text}, ${_lngController.text}',
+                          style: TextStyle(
+                            fontFamily: 'JetBrains Mono',
+                            fontSize: 9,
+                            color: _mapTapped ? TacticalTheme.secondaryContainer : TacticalTheme.outline,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildLabel('LONGITUDE'),
-                  TextFormField(
-                    controller: _lngController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(fontFamily: 'JetBrains Mono', fontSize: 13, color: TacticalTheme.onSurface),
-                    decoration: _buildInputDecoration('36.8044'),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ],
     );
   }
 
-  // Photo Uploader Box
+  // Photo Uploader Box (Optional)
   Widget _buildPhotoUploader() {
     return GestureDetector(
       onTap: () {
@@ -534,7 +657,7 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Selected: sighting_snap_nairobi.jpg'),
+            content: Text('Selected optional photo: sighting_snap_nairobi.jpg'),
             backgroundColor: TacticalTheme.surfaceContainer,
           ),
         );
@@ -731,4 +854,49 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
       ),
     );
   }
+}
+
+// Custom Painter to draw a high-fidelity radar vector mockup background
+class TacticalMapGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint linePaint = Paint()
+      ..color = TacticalTheme.primary.withOpacity(0.08)
+      ..strokeWidth = 1.0;
+
+    final Paint borderPaint = Paint()
+      ..color = TacticalTheme.primary.withOpacity(0.2)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    // Draw Grid Lines (Horizontal and Vertical)
+    const double gridSize = 25.0;
+    for (double x = 0; x < size.width; x += gridSize) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
+    }
+    for (double y = 0; y < size.height; y += gridSize) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
+    }
+
+    // Draw Radar Circular rings
+    final Offset center = Offset(size.width / 2, size.height / 2);
+    canvas.drawCircle(center, 40, borderPaint);
+    canvas.drawCircle(center, 80, linePaint);
+    canvas.drawCircle(center, 120, linePaint);
+
+    // Draw Radar scan sweeps
+    final Paint sweepPaint = Paint()
+      ..color = TacticalTheme.primary.withOpacity(0.02)
+      ..style = PaintingStyle.fill;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: 120),
+      -0.5,
+      1.0,
+      true,
+      sweepPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
