@@ -6,11 +6,13 @@ import VerificationModal from './components/VerificationModal';
 import RejectionModal from './components/RejectionModal';
 import DetailModal from './components/DetailModal';
 import SearchFilters from './components/SearchFilters';
+import { apiService } from './services/api';
+import { mapFrontendCasesArray, mapFrontendStatusToBackend } from './services/dataMapper';
 import { mockCases } from './data/mockData';
 
 const App = () => {
-  const [cases, setCases] = useState(mockCases);
-  const [filteredCases, setFilteredCases] = useState(mockCases);
+  const [cases, setCases] = useState([]);
+  const [filteredCases, setFilteredCases] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [regionFilter, setRegionFilter] = useState('all');
@@ -21,6 +23,30 @@ const App = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [actionCase, setActionCase] = useState(null);
   const [clickPosition, setClickPosition] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch cases from backend on mount
+  useEffect(() => {
+    const fetchCases = async () => {
+      try {
+        setLoading(true);
+        const backendCases = await apiService.getCases();
+        const frontendCases = mapFrontendCasesArray(backendCases);
+        setCases(frontendCases);
+        setError(null);
+      } catch (err) {
+        console.error('Failed to fetch cases from backend:', err);
+        setError('Failed to load cases from backend. Using mock data instead.');
+        // Fallback to mock data if backend fails
+        setCases(mockCases);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCases();
+  }, []);
 
   // Filter cases based on search, status, and region
   useEffect(() => {
@@ -51,7 +77,7 @@ const App = () => {
         case 'lastSeenDesc':
           return new Date(b.lastSeenDate) - new Date(a.lastSeenDate);
         case 'lastSeenAsc':
-          return new Date(a.lastSeenDate) - new Date(b.lastSeenDate);
+          return new Date(a.lastSeenDate) - new Date(a.lastSeenDate);
         default:
           return 0;
       }
@@ -81,61 +107,77 @@ const App = () => {
     setShowDetailModal(true);
   };
 
-  const confirmVerification = (officerBadge, notes) => {
+  const confirmVerification = async (officerBadge, notes) => {
     if (!actionCase) return;
     
-    const updatedCases = cases.map(c => {
-      if (c.id === actionCase.id) {
-        const newHistory = [...(c.verificationHistory || []), {
-          action: 'VERIFIED',
-          officerBadge,
-          notes,
-          timestamp: new Date().toISOString(),
-          status: 'Verified'
-        }];
-        return {
-          ...c,
-          status: 'Verified',
-          verificationHistory: newHistory,
-          verifiedBy: officerBadge,
-          verifiedAt: new Date().toISOString()
-        };
-      }
-      return c;
-    });
-    
-    setCases(updatedCases);
-    setShowVerifyModal(false);
-    setActionCase(null);
+    try {
+      const backendStatus = mapFrontendStatusToBackend('Verified');
+      await apiService.updateCaseStatus(actionCase.id, backendStatus);
+      
+      const updatedCases = cases.map(c => {
+        if (c.id === actionCase.id) {
+          const newHistory = [...(c.verificationHistory || []), {
+            action: 'VERIFIED',
+            officerBadge,
+            notes,
+            timestamp: new Date().toISOString(),
+            status: 'Verified'
+          }];
+          return {
+            ...c,
+            status: 'Verified',
+            verificationHistory: newHistory,
+            verifiedBy: officerBadge,
+            verifiedAt: new Date().toISOString()
+          };
+        }
+        return c;
+      });
+      
+      setCases(updatedCases);
+      setShowVerifyModal(false);
+      setActionCase(null);
+    } catch (err) {
+      console.error('Failed to verify case:', err);
+      alert('Failed to verify case. Please try again.');
+    }
   };
 
-  const confirmRejection = (officerBadge, reason) => {
+  const confirmRejection = async (officerBadge, reason) => {
     if (!actionCase) return;
     
-    const updatedCases = cases.map(c => {
-      if (c.id === actionCase.id) {
-        const newHistory = [...(c.verificationHistory || []), {
-          action: 'REJECTED',
-          officerBadge,
-          notes: reason,
-          timestamp: new Date().toISOString(),
-          status: 'Rejected'
-        }];
-        return {
-          ...c,
-          status: 'Rejected',
-          verificationHistory: newHistory,
-          rejectedBy: officerBadge,
-          rejectedAt: new Date().toISOString(),
-          rejectionReason: reason
-        };
-      }
-      return c;
-    });
-    
-    setCases(updatedCases);
-    setShowRejectModal(false);
-    setActionCase(null);
+    try {
+      const backendStatus = mapFrontendStatusToBackend('Rejected');
+      await apiService.updateCaseStatus(actionCase.id, backendStatus);
+      
+      const updatedCases = cases.map(c => {
+        if (c.id === actionCase.id) {
+          const newHistory = [...(c.verificationHistory || []), {
+            action: 'REJECTED',
+            officerBadge,
+            notes: reason,
+            timestamp: new Date().toISOString(),
+            status: 'Rejected'
+          }];
+          return {
+            ...c,
+            status: 'Rejected',
+            verificationHistory: newHistory,
+            rejectedBy: officerBadge,
+            rejectedAt: new Date().toISOString(),
+            rejectionReason: reason
+          };
+        }
+        return c;
+      });
+      
+      setCases(updatedCases);
+      setShowRejectModal(false);
+      setActionCase(null);
+    } catch (err) {
+      console.error('Failed to reject case:', err);
+      alert('Failed to reject case. Please try again.');
+    }
   };
 
   const getStats = () => ({
@@ -172,6 +214,11 @@ const App = () => {
               <span className="material-symbols-outlined text-sm">schedule</span>
               <span>{currentTime.toLocaleString()}</span>
             </div>
+            {error && (
+              <div className="mt-2 p-2 bg-error-container rounded text-on-error-container text-sm">
+                {error}
+              </div>
+            )}
           </div>
 
           {/* Stats Cards */}
@@ -246,7 +293,12 @@ const App = () => {
           {/* Cases Grid */}
           <div className="mt-6">
             <h3 className="font-label-caps text-label-caps text-outline mb-4">ACTIVE CASES</h3>
-            {filteredCases.length === 0 ? (
+            {loading ? (
+              <div className="bg-surface-container rounded-lg p-8 text-center border border-outline-variant">
+                <span className="material-symbols-outlined text-4xl text-outline mb-2 animate-spin">refresh</span>
+                <p className="text-on-surface-variant">Loading cases from backend...</p>
+              </div>
+            ) : filteredCases.length === 0 ? (
               <div className="bg-surface-container rounded-lg p-8 text-center border border-outline-variant">
                 <span className="material-symbols-outlined text-4xl text-outline mb-2">search_off</span>
                 <p className="text-on-surface-variant">No cases found matching your criteria.</p>
