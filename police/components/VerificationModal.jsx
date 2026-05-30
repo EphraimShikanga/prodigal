@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const VerificationModal = ({ isOpen, onClose, onConfirm, caseData }) => {
+const VerificationModal = ({ isOpen, onClose, onConfirm, caseData, clickPosition }) => {
   const [officerBadge, setOfficerBadge] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -15,9 +15,23 @@ const VerificationModal = ({ isOpen, onClose, onConfirm, caseData }) => {
     }
   };
 
+  const modalStyle = clickPosition ? {
+    position: 'fixed',
+    top: `${clickPosition.y}px`,
+    left: `${clickPosition.x}px`,
+    transform: 'translate(-50%, -50%)',
+    zIndex: 200,
+  } : {
+    position: 'fixed',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    zIndex: 200,
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[200] p-4">
-      <div className="bg-surface-container rounded-lg border border-outline-variant max-w-md w-full">
+    <div style={modalStyle}>
+      <div className="bg-surface-container rounded-lg border border-outline-variant max-w-md w-full shadow-xl">
         <div className="p-4 border-b border-outline-variant flex justify-between items-center">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">verified</span>

@@ -48,7 +48,7 @@ const SearchFilters = ({ searchTerm, setSearchTerm, statusFilter, setStatusFilte
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-surface-container-lowest border border-outline-variant rounded-DEFAULT py-2 pl-9 pr-3 font-body-sm text-body-sm text-on-surface placeholder:text-outline focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all"
+            className="w-full bg-surface-container border border-outline-variant rounded-DEFAULT py-2 pl-9 pr-3 font-body-sm text-body-sm text-on-surface placeholder:text-outline-variant focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none transition-all"
             placeholder="Search OB Number or Name..."
           />
         </div>
@@ -58,7 +58,7 @@ const SearchFilters = ({ searchTerm, setSearchTerm, statusFilter, setStatusFilte
           <select 
             value={regionFilter}
             onChange={(e) => setRegionFilter(e.target.value)}
-            className="w-full sm:w-auto bg-surface-container-lowest border border-outline-variant rounded-DEFAULT py-2 px-3 pr-8 font-body-sm text-body-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none appearance-none"
+            className="w-full sm:w-auto bg-surface-container border border-outline-variant rounded-DEFAULT py-2 px-3 pr-8 font-body-sm text-body-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none appearance-none"
           >
             {regions.map(region => (
               <option key={region.value} value={region.value}>{region.label}</option>
@@ -68,7 +68,7 @@ const SearchFilters = ({ searchTerm, setSearchTerm, statusFilter, setStatusFilte
         
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <span className="material-symbols-outlined text-outline">sort</span>
-          <select className="w-full sm:w-auto bg-surface-container-lowest border border-outline-variant rounded-DEFAULT py-2 px-3 pr-8 font-body-sm text-body-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none appearance-none">
+          <select className="w-full sm:w-auto bg-surface-container border border-outline-variant rounded-DEFAULT py-2 px-3 pr-8 font-body-sm text-body-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none appearance-none">
             <option>High Priority</option>
             <option>Recent</option>
             <option>Nearby</option>
