@@ -14,26 +14,9 @@ const CaseCard = ({ caseData, onVerify, onReject, onViewDetails }) => {
     }
   };
 
-  const getPriorityBadge = () => {
-    if (caseData.priority === 'high') {
-      return (
-        <span className="bg-error/20 text-error border border-error/30 font-label-caps text-[10px] px-2 py-1 rounded-sm flex items-center gap-1 backdrop-blur-sm">
-          <span className="material-symbols-outlined text-[12px]">warning</span>
-          URGENT
-        </span>
-      );
-    }
-    return null;
-  };
-
   return (
     <>
       <article className="bg-surface border border-outline-variant rounded-lg overflow-hidden flex flex-col relative group hover:border-primary/50 transition-all duration-300">
-        {caseData.priority === 'high' && (
-          <div className="absolute top-2 right-2 z-10 flex gap-2">
-            {getPriorityBadge()}
-          </div>
-        )}
         
         <div className="h-48 relative overflow-hidden bg-surface-container-lowest cursor-pointer" onClick={() => setShowImagePreview(true)}>
           <img 
@@ -98,14 +81,14 @@ const CaseCard = ({ caseData, onVerify, onReject, onViewDetails }) => {
           {caseData.status === 'Pending' && (
             <div className="flex gap-2">
               <button 
-                onClick={() => onVerify(caseData)}
+                onClick={(e) => onVerify(caseData, e)}
                 className="bg-primary/20 text-primary font-label-caps text-label-caps px-3 py-1 rounded hover:bg-primary/30 transition-colors flex items-center gap-1 text-xs"
               >
                 <span className="material-symbols-outlined text-[14px]">check</span>
                 VERIFY
               </button>
               <button 
-                onClick={() => onReject(caseData)}
+                onClick={(e) => onReject(caseData, e)}
                 className="bg-error/20 text-error font-label-caps text-label-caps px-3 py-1 rounded hover:bg-error/30 transition-colors flex items-center gap-1 text-xs"
               >
                 <span className="material-symbols-outlined text-[14px]">close</span>

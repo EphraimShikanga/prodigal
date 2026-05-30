@@ -6,19 +6,47 @@ import VerificationModal from './components/VerificationModal';
 import RejectionModal from './components/RejectionModal';
 import DetailModal from './components/DetailModal';
 import SearchFilters from './components/SearchFilters';
+import { apiService } from './services/api';
+import { mapFrontendCasesArray, mapFrontendStatusToBackend } from './services/dataMapper';
 import { mockCases } from './data/mockData';
 
 const App = () => {
-  const [cases, setCases] = useState(mockCases);
-  const [filteredCases, setFilteredCases] = useState(mockCases);
+  const [cases, setCases] = useState([]);
+  const [filteredCases, setFilteredCases] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [regionFilter, setRegionFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('reportedDesc');
   const [selectedCase, setSelectedCase] = useState(null);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [actionCase, setActionCase] = useState(null);
+  const [clickPosition, setClickPosition] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch cases from backend on mount
+  useEffect(() => {
+    const fetchCases = async () => {
+      try {
+        setLoading(true);
+        const backendCases = await apiService.getCases();
+        const frontendCases = mapFrontendCasesArray(backendCases);
+        setCases(frontendCases);
+        setError(null);
+      } catch (err) {
+        console.error('Failed to fetch cases from backend:', err);
+        setError('Failed to load cases from backend. Using mock data instead.');
+        // Fallback to mock data if backend fails
+        setCases(mockCases);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCases();
+  }, []);
 
   // Filter cases based on search, status, and region
   useEffect(() => {
@@ -38,17 +66,39 @@ const App = () => {
     if (regionFilter !== 'all') {
       filtered = filtered.filter(c => c.region === regionFilter);
     }
+
+    // Sort cases based on sortBy
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'reportedDesc':
+          return new Date(b.reportedAt) - new Date(a.reportedAt);
+        case 'reportedAsc':
+          return new Date(a.reportedAt) - new Date(b.reportedAt);
+        case 'lastSeenDesc':
+          return new Date(b.lastSeenDate) - new Date(a.lastSeenDate);
+        case 'lastSeenAsc':
+          return new Date(a.lastSeenDate) - new Date(a.lastSeenDate);
+        default:
+          return 0;
+      }
+    });
     
     setFilteredCases(filtered);
-  }, [cases, searchTerm, statusFilter, regionFilter]);
+  }, [cases, searchTerm, statusFilter, regionFilter, sortBy]);
 
-  const handleVerify = (caseData) => {
+  const handleVerify = (caseData, event) => {
     setActionCase(caseData);
+    if (event) {
+      setClickPosition({ x: event.clientX, y: event.clientY });
+    }
     setShowVerifyModal(true);
   };
 
-  const handleReject = (caseData) => {
+  const handleReject = (caseData, event) => {
     setActionCase(caseData);
+    if (event) {
+      setClickPosition({ x: event.clientX, y: event.clientY });
+    }
     setShowRejectModal(true);
   };
 
@@ -57,61 +107,77 @@ const App = () => {
     setShowDetailModal(true);
   };
 
-  const confirmVerification = (officerBadge, notes) => {
+  const confirmVerification = async (officerBadge, notes) => {
     if (!actionCase) return;
     
-    const updatedCases = cases.map(c => {
-      if (c.id === actionCase.id) {
-        const newHistory = [...(c.verificationHistory || []), {
-          action: 'VERIFIED',
-          officerBadge,
-          notes,
-          timestamp: new Date().toISOString(),
-          status: 'Verified'
-        }];
-        return {
-          ...c,
-          status: 'Verified',
-          verificationHistory: newHistory,
-          verifiedBy: officerBadge,
-          verifiedAt: new Date().toISOString()
-        };
-      }
-      return c;
-    });
-    
-    setCases(updatedCases);
-    setShowVerifyModal(false);
-    setActionCase(null);
+    try {
+      const backendStatus = mapFrontendStatusToBackend('Verified');
+      await apiService.updateCaseStatus(actionCase.id, backendStatus);
+      
+      const updatedCases = cases.map(c => {
+        if (c.id === actionCase.id) {
+          const newHistory = [...(c.verificationHistory || []), {
+            action: 'VERIFIED',
+            officerBadge,
+            notes,
+            timestamp: new Date().toISOString(),
+            status: 'Verified'
+          }];
+          return {
+            ...c,
+            status: 'Verified',
+            verificationHistory: newHistory,
+            verifiedBy: officerBadge,
+            verifiedAt: new Date().toISOString()
+          };
+        }
+        return c;
+      });
+      
+      setCases(updatedCases);
+      setShowVerifyModal(false);
+      setActionCase(null);
+    } catch (err) {
+      console.error('Failed to verify case:', err);
+      alert('Failed to verify case. Please try again.');
+    }
   };
 
-  const confirmRejection = (officerBadge, reason) => {
+  const confirmRejection = async (officerBadge, reason) => {
     if (!actionCase) return;
     
-    const updatedCases = cases.map(c => {
-      if (c.id === actionCase.id) {
-        const newHistory = [...(c.verificationHistory || []), {
-          action: 'REJECTED',
-          officerBadge,
-          notes: reason,
-          timestamp: new Date().toISOString(),
-          status: 'Rejected'
-        }];
-        return {
-          ...c,
-          status: 'Rejected',
-          verificationHistory: newHistory,
-          rejectedBy: officerBadge,
-          rejectedAt: new Date().toISOString(),
-          rejectionReason: reason
-        };
-      }
-      return c;
-    });
-    
-    setCases(updatedCases);
-    setShowRejectModal(false);
-    setActionCase(null);
+    try {
+      const backendStatus = mapFrontendStatusToBackend('Rejected');
+      await apiService.updateCaseStatus(actionCase.id, backendStatus);
+      
+      const updatedCases = cases.map(c => {
+        if (c.id === actionCase.id) {
+          const newHistory = [...(c.verificationHistory || []), {
+            action: 'REJECTED',
+            officerBadge,
+            notes: reason,
+            timestamp: new Date().toISOString(),
+            status: 'Rejected'
+          }];
+          return {
+            ...c,
+            status: 'Rejected',
+            verificationHistory: newHistory,
+            rejectedBy: officerBadge,
+            rejectedAt: new Date().toISOString(),
+            rejectionReason: reason
+          };
+        }
+        return c;
+      });
+      
+      setCases(updatedCases);
+      setShowRejectModal(false);
+      setActionCase(null);
+    } catch (err) {
+      console.error('Failed to reject case:', err);
+      alert('Failed to reject case. Please try again.');
+    }
   };
 
   const getStats = () => ({
@@ -148,6 +214,11 @@ const App = () => {
               <span className="material-symbols-outlined text-sm">schedule</span>
               <span>{currentTime.toLocaleString()}</span>
             </div>
+            {error && (
+              <div className="mt-2 p-2 bg-error-container rounded text-on-error-container text-sm">
+                {error}
+              </div>
+            )}
           </div>
 
           {/* Stats Cards */}
@@ -207,68 +278,6 @@ const App = () => {
             </div>
           </div>
 
-          {/* Active Amber Alert Section - Show highest priority case */}
-          {cases.filter(c => c.status === 'Pending' && c.priority === 'high').length > 0 && (
-            <section className="bg-[#121212] border border-[#ffffff1a] rounded relative overflow-hidden flex flex-col md:flex-row shadow-lg mb-6">
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-secondary-container"></div>
-              <div className="p-4 flex flex-col gap-2 bg-secondary-container/10 border-b md:border-b-0 md:border-r border-[#ffffff1a] md:w-1/3 z-10 relative">
-                <div className="flex items-center gap-2">
-                  <span className="font-label-caps text-label-caps text-secondary-container px-2 py-0.5 bg-secondary-container/20 border border-secondary-container/30 rounded inline-flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-secondary-container animate-pulse"></span>
-                    ACTIVE AMBER ALERT
-                  </span>
-                  <span className="font-data-mono text-data-mono text-outline text-xs">
-                    {cases.find(c => c.status === 'Pending' && c.priority === 'high')?.obNumber}
-                  </span>
-                </div>
-                <h2 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mt-2">
-                  {cases.find(c => c.status === 'Pending' && c.priority === 'high')?.childName}
-                </h2>
-                <div className="flex gap-4 mt-1 font-data-mono text-data-mono text-on-surface-variant text-sm">
-                  <span>Age: {cases.find(c => c.status === 'Pending' && c.priority === 'high')?.age}</span>
-                  <span>Gender: {cases.find(c => c.status === 'Pending' && c.priority === 'high')?.gender}</span>
-                </div>
-                <p className="font-body-sm text-body-sm text-on-surface-variant mt-2 border-t border-[#ffffff1a] pt-2">
-                  {cases.find(c => c.status === 'Pending' && c.priority === 'high')?.description?.substring(0, 100)}...
-                </p>
-              </div>
-              <div className="flex-1 flex flex-col md:flex-row">
-                <div className="md:w-1/2 p-4 relative group">
-                  <div className="aspect-square md:aspect-auto md:h-full bg-surface-container-highest rounded border border-outline-variant overflow-hidden relative">
-                    <img 
-                      src={cases.find(c => c.status === 'Pending' && c.priority === 'high')?.imageUrl} 
-                      alt="Child" 
-                      className="w-full h-full object-cover mix-blend-luminosity opacity-80"
-                    />
-                    <div className="absolute inset-0 bg-primary/10 mix-blend-overlay"></div>
-                  </div>
-                </div>
-                <div className="md:w-1/2 p-4 flex flex-col justify-center gap-4">
-                  <div>
-                    <div className="font-label-caps text-label-caps text-outline mb-1">LAST KNOWN LOCATION</div>
-                    <div className="font-body-lg text-body-lg text-on-surface flex items-center gap-2">
-                      <span className="material-symbols-outlined text-secondary-container text-sm">location_on</span>
-                      <span>{cases.find(c => c.status === 'Pending' && c.priority === 'high')?.lastSeen}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-label-caps text-label-caps text-outline mb-1">REPORTED BY</div>
-                    <div className="font-body-lg text-body-lg text-on-surface">
-                      {cases.find(c => c.status === 'Pending' && c.priority === 'high')?.reporterName}
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => handleVerify(cases.find(c => c.status === 'Pending' && c.priority === 'high'))}
-                    className="mt-2 bg-primary text-on-primary-fixed font-label-caps text-label-caps py-2 px-4 rounded hover:bg-primary-fixed transition-colors flex items-center justify-center gap-2 w-full shadow-[0_0_10px_rgba(152,203,255,0.3)]"
-                  >
-                    <span className="material-symbols-outlined text-sm">verified</span>
-                    VERIFY CASE
-                  </button>
-                </div>
-              </div>
-            </section>
-          )}
-
           {/* Search and Filters */}
           <SearchFilters 
             searchTerm={searchTerm}
@@ -277,12 +286,19 @@ const App = () => {
             setStatusFilter={setStatusFilter}
             regionFilter={regionFilter}
             setRegionFilter={setRegionFilter}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
           />
 
           {/* Cases Grid */}
           <div className="mt-6">
             <h3 className="font-label-caps text-label-caps text-outline mb-4">ACTIVE CASES</h3>
-            {filteredCases.length === 0 ? (
+            {loading ? (
+              <div className="bg-surface-container rounded-lg p-8 text-center border border-outline-variant">
+                <span className="material-symbols-outlined text-4xl text-outline mb-2 animate-spin">refresh</span>
+                <p className="text-on-surface-variant">Loading cases from backend...</p>
+              </div>
+            ) : filteredCases.length === 0 ? (
               <div className="bg-surface-container rounded-lg p-8 text-center border border-outline-variant">
                 <span className="material-symbols-outlined text-4xl text-outline mb-2">search_off</span>
                 <p className="text-on-surface-variant">No cases found matching your criteria.</p>
@@ -315,15 +331,23 @@ const App = () => {
       {/* Modals */}
       <VerificationModal 
         isOpen={showVerifyModal}
-        onClose={() => setShowVerifyModal(false)}
+        onClose={() => {
+          setShowVerifyModal(false);
+          setClickPosition(null);
+        }}
         onConfirm={confirmVerification}
         caseData={actionCase}
+        clickPosition={clickPosition}
       />
       <RejectionModal 
         isOpen={showRejectModal}
-        onClose={() => setShowRejectModal(false)}
+        onClose={() => {
+          setShowRejectModal(false);
+          setClickPosition(null);
+        }}
         onConfirm={confirmRejection}
         caseData={actionCase}
+        clickPosition={clickPosition}
       />
       <DetailModal 
         isOpen={showDetailModal}
