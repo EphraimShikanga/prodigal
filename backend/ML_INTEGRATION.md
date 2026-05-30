@@ -39,32 +39,42 @@ makes the DB match the Prisma schema exactly, so it **deletes `argus_faces`**.
 Re-apply step 2 after any future `db push`. (`prisma migrate deploy` is additive
 and safe, so prefer migrations once you have them.)
 
-## Setup against Supabase
+## Setup (local Postgres + pgvector)
 
-1. **Get the connection string:** Supabase → Settings → Database → Connection
-   string → **Session pooler** (IPv4). Append `?sslmode=require`.
+The DB is a single Postgres-with-pgvector instance shared by the backend (Prisma
+tables) and the ML service (`argus_faces`). It runs via `backend/docker-compose.yml`
+(image built from `backend/database/Dockerfile` = `pgvector/pgvector:pg16`),
+exposed on host port **1223**.
+
+1. **Start the database**
+   ```
+   cd backend
+   docker compose up -d --build db        # Postgres + pgvector on localhost:1223
+   ```
 2. **backend/.env**
    ```
-   DATABASE_URL=postgresql://postgres.<ref>:<pwd>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require
-   ML_SERVICE_URL=http://localhost:8000   # or your deployed ML URL
+   DATABASE_URL=postgresql://argus:argus@localhost:1223/argus?schema=public
+   ML_SERVICE_URL=http://localhost:8000
    ```
 3. **ml/.env** (same DB so vectors persist alongside the app data)
    ```
-   ARGUS_DATABASE_URL=<same value as DATABASE_URL above>
+   ARGUS_DATABASE_URL=postgresql://argus:argus@localhost:1223/argus
    ARGUS_STORE_BACKEND=auto      # uses pgvector when ARGUS_DATABASE_URL is set
    ```
-4. **Create tables**
+4. **Create tables** (order matters — see gotcha above)
    ```
    cd backend && npx prisma db push
-   # then paste ml/app/db/schema.sql into the Supabase SQL editor and run it
+   docker exec -i backend-db-1 psql -U argus -d argus < ../ml/app/db/schema.sql
    ```
-   (Supabase also requires the `vector` extension — the SQL enables it, or turn
-   it on under Database → Extensions.)
 5. **Run** (two terminals)
    ```
    cd ml      && .venv\Scripts\python -m uvicorn app.main:app --port 8000
    cd backend && npm run start:dev
    ```
+
+> To use a managed Postgres instead (e.g. Supabase/Neon/RDS), just set
+> `DATABASE_URL` / `ARGUS_DATABASE_URL` to that server's connection string
+> (managed Postgres usually needs `?sslmode=require`). No code changes.
 
 ## Verified flow (what the e2e test exercised)
 
