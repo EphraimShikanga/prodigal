@@ -27,9 +27,9 @@ export class CreateAlertDto {
   @IsNotEmpty()
   description: string;
 
-  @IsUrl()
-  @IsNotEmpty()
-  photo_url: string;
+  @IsUrl({}, { message: 'photo_url must be a valid URL' })
+  @IsOptional()
+  photo_url?: string | null;
 
   @IsString()
   @IsNotEmpty()

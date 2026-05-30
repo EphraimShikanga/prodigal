@@ -5,6 +5,7 @@ import { MlModule } from './ml/ml.module';
 import { CasesModule } from './cases/cases.module';
 import { SightingsModule } from './sightings/sightings.module';
 import { AlertsModule } from './alerts/alerts.module';
+import { UploadModule } from './common/upload/upload.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { AlertsModule } from './alerts/alerts.module';
     CasesModule,
     SightingsModule,
     AlertsModule,
+    UploadModule,
   ],
 })
 export class AppModule {}

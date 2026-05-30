@@ -1,10 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAlertDto } from './dto/create-alert.dto';
+import { MlService } from '../ml/ml.service';
 
 @Injectable()
 export class AlertsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AlertsService.name);
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mlService: MlService,
+  ) {}
 
   async findAll() {
     return this.prisma.amberAlert.findMany({
@@ -29,7 +34,7 @@ export class AlertsService {
           age: dto.age,
           gender: dto.gender,
           description: dto.description,
-          photo_url: dto.photo_url,
+          photo_url: dto.photo_url || 'https://via.placeholder.com/400x300?text=No+Image',
         },
       });
 
@@ -50,7 +55,7 @@ export class AlertsService {
           station_name: 'Mobile Report',
           officer_id: 'PENDING',
           officer_name: 'Pending Verification',
-          abstract_image_url: dto.photo_url,
+          abstract_image_url: dto.photo_url || 'https://via.placeholder.com/400x300?text=No+Image',
           stamp_verification_status: 'PENDING',
         },
       });
@@ -96,7 +101,7 @@ export class AlertsService {
   }
 
   async verifyAlert(caseId: string) {
-    return this.prisma.case.update({
+    const updatedCase = await this.prisma.case.update({
       where: { id: caseId },
       data: {
         status: 'APPROVED',
@@ -113,6 +118,29 @@ export class AlertsService {
         police_abstract: true,
       },
     });
+
+    // Enroll the face in the ML service for face recognition
+    try {
+      if (updatedCase.child.photo_url && updatedCase.child.photo_url !== 'https://via.placeholder.com/400x300?text=No+Image') {
+        await this.mlService.enrollCase({
+          caseId: updatedCase.id,
+          obNumber: updatedCase.police_abstract.police_ob_number,
+          photoUrl: updatedCase.child.photo_url,
+          metadata: {
+            child_name: updatedCase.child.name,
+            age: updatedCase.child.age,
+            gender: updatedCase.child.gender,
+            description: updatedCase.child.description,
+          },
+        });
+        this.logger.log(`Successfully enrolled face for case ${caseId}`);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to enroll face for case ${caseId}: ${error.message}`);
+      // Don't throw - the case is still verified even if ML enrollment fails
+    }
+
+    return updatedCase;
   }
 
   async getPublicAlerts() {
