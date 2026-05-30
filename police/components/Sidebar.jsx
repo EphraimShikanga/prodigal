@@ -1,16 +1,37 @@
 import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const Sidebar = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [activeItem, setActiveItem] = useState('dashboard');
 
   const navItems = [
-    { id: 'alerts', label: 'Alerts', icon: 'notifications_active' },
-    { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { id: 'find-matches', label: 'Find Matches', icon: 'search' },
-    { id: 'ai-aging', label: 'AI Aging Detection', icon: 'face_retouching_natural' },
-    { id: 'live-camera', label: 'Live Camera', icon: 'videocam' },
-    { id: 'activity-log', label: 'Activity Log', icon: 'history' },
+    { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', path: '/' },
+    { id: 'alerts', label: 'Mobile Reports', icon: 'notifications_active', path: '/alerts' },
+    { id: 'public-alerts', label: 'Public Alerts', icon: 'campaign', path: '/public-alerts' },
+    { id: 'found', label: 'Found Cases', icon: 'check_circle', path: '/found' },
+    { id: 'find-matches', label: 'Find Matches', icon: 'search', path: '#' },
+    { id: 'ai-aging', label: 'AI Aging Detection', icon: 'face_retouching_natural', path: '#' },
+    { id: 'live-camera', label: 'Live Camera', icon: 'videocam', path: '#' },
+    { id: 'activity-log', label: 'Activity Log', icon: 'history', path: '#' },
   ];
+
+  const handleNavClick = (item) => {
+    setActiveItem(item.id);
+    if (item.path && item.path !== '#') {
+      navigate(item.path);
+    }
+  };
+
+  // Update active item based on current path
+  React.useEffect(() => {
+    const currentPath = location.pathname;
+    const matchingItem = navItems.find(item => item.path === currentPath);
+    if (matchingItem) {
+      setActiveItem(matchingItem.id);
+    }
+  }, [location.pathname]);
 
   return (
     <>
@@ -23,8 +44,11 @@ const Sidebar = () => {
         {navItems.map(item => (
           <a
             key={item.id}
-            href="#"
-            onClick={() => setActiveItem(item.id)}
+            href={item.path}
+            onClick={(e) => {
+              e.preventDefault();
+              handleNavClick(item);
+            }}
             className={`w-full flex justify-center py-3 group relative transition-all duration-200 ease-in-out ${
               activeItem === item.id
                 ? 'text-primary border-l-4 border-primary bg-surface-variant'
@@ -50,8 +74,11 @@ const Sidebar = () => {
         {navItems.map(item => (
           <a
             key={item.id}
-            href="#"
-            onClick={() => setActiveItem(item.id)}
+            href={item.path}
+            onClick={(e) => {
+              e.preventDefault();
+              handleNavClick(item);
+            }}
             className={`flex flex-col items-center justify-center p-2 transition-transform ${
               activeItem === item.id
                 ? 'bg-secondary-container text-on-secondary-container rounded-lg'
