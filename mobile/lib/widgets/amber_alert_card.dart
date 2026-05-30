@@ -106,7 +106,7 @@ class AmberAlertCard extends StatelessWidget {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              // Tactical Grayscale tinted image
+                              // Tactical Grayscale tinted image (authentic photograph)
                               ColorFiltered(
                                 colorFilter: const ColorFilter.matrix(<double>[
                                   0.2126, 0.7152, 0.0722, 0, -20,
@@ -115,36 +115,13 @@ class AmberAlertCard extends StatelessWidget {
                                   0,      0,      0,      0.8, 0,
                                 ]),
                                 child: Image.network(
-                                  'https://lh3.googleusercontent.com/aida-public/AB6AXuDe5aBRWTvJiqfgouZEygdH6OgAnSXt3f7tn0ArgMaY0OeXc_9NNeOyucVvOM67GgXRuSUwcwWaRUpOzezPpgRlR2s5BQZzzq-L6Y7pdLuI2EXl85FfKmRlW_sLcaHa_4VVCLEcdJX2godUfN1fLgSlOlE1Y3GkBjlw38TVR6JukIYbeNy2q8vcLEHn7Moh2BOHfI4-lPfn6ZKaE7_jEWneyWL5hAaroICbHWbKnh_Mgex4Xt_Btdp_Ivru3HYF1ednqQ9u3OZSMtBo',
+                                  'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?auto=format&fit=crop&q=80&w=400',
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) {
                                     return const Center(
                                       child: Icon(Icons.portrait, size: 48, color: TacticalTheme.outline),
                                     );
                                   },
-                                ),
-                              ),
-                              // Small bottom info Overlay
-                              Positioned(
-                                bottom: 4,
-                                left: 4,
-                                right: 4,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                  color: Colors.black.withOpacity(0.6),
-                                  child: const Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'MATCH',
-                                        style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 8, color: TacticalTheme.primary),
-                                      ),
-                                      Text(
-                                        '98.4%',
-                                        style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 8, color: TacticalTheme.primary, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
                                 ),
                               ),
                             ],

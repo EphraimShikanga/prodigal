@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../theme/tactical_theme.dart';
 
 class ReportSightingScreen extends StatefulWidget {
@@ -34,16 +36,16 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
   late final DateTime _autoTime;
 
   // Map Picker State (Past Sighting Mode)
-  Offset _mapPinOffset = const Offset(150, 100); // Default pin in center of mock map container
-  bool _mapTapped = false;
+  LatLng _mapPinLatLng = const LatLng(-1.2825, 36.8219); // Default Nairobi coordinate
+  final MapController _mapController = MapController();
 
   @override
   void initState() {
     super.initState();
     _autoTime = DateTime.now();
     _timeController.text = _formatDateTime(_autoTime);
-    _latController.text = "-1.2825"; // Default manual lat
-    _lngController.text = "36.8219"; // Default manual lng
+    _latController.text = _mapPinLatLng.latitude.toStringAsFixed(5);
+    _lngController.text = _mapPinLatLng.longitude.toStringAsFixed(5);
     _locationNameController.text = "Ngong Road Junction";
   }
 
@@ -54,6 +56,7 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
     _latController.dispose();
     _lngController.dispose();
     _timeController.dispose();
+    _mapController.dispose();
     _recordTimer?.cancel();
     super.dispose();
   }
@@ -144,26 +147,6 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
         });
       }
     }
-  }
-
-  // Handle map tapping to translate tap position into coordinates
-  void _onMapTapped(TapUpDetails details, Size mapSize) {
-    setState(() {
-      _mapPinOffset = details.localPosition;
-      _mapTapped = true;
-
-      // Translate tap coordinates:
-      // Map width maps to Longitude range: 36.7800 to 36.8600 (Nairobi West to East)
-      // Map height maps to Latitude range: -1.2500 to -1.3100 (Nairobi North to South)
-      final double percentX = _mapPinOffset.dx / mapSize.width;
-      final double percentY = _mapPinOffset.dy / mapSize.height;
-
-      final double mockLng = 36.7800 + (percentX * 0.0800);
-      final double mockLat = -1.2500 - (percentY * 0.0600);
-
-      _latController.text = mockLat.toStringAsFixed(4);
-      _lngController.text = mockLng.toStringAsFixed(4);
-    });
   }
 
   void _submitSighting() {
@@ -532,12 +515,12 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
     );
   }
 
-  // Manual Past Mode inputs with Pickers
+  // Manual Past Mode inputs with live zoomable Map Picker
   Widget _buildPastManualFields() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Sighting Time input with Tap Picker
+        // Sighting Time input with system Date/Time Picker
         _buildLabel('SIGHTING DATE & TIME'),
         TextFormField(
           controller: _timeController,
@@ -559,90 +542,83 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
         ),
         const SizedBox(height: 16),
 
-        // INTERACTIVE MAP PICKER COMPONENT
+        // INTERACTIVE MAP PICKER COMPONENT (OpenStreetMap Live View)
         _buildLabel('SELECT SIGHTING LOCATION (TAP MAP TO PINPOINT)'),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final Size mapSize = Size(constraints.maxWidth, 180);
-            return GestureDetector(
-              onTapUp: (details) => _onMapTapped(details, mapSize),
-              child: Container(
-                width: mapSize.width,
-                height: mapSize.height,
-                decoration: BoxDecoration(
-                  color: TacticalTheme.surfaceLowest,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: TacticalTheme.outlineVariant),
+        Container(
+          height: 200,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: TacticalTheme.outlineVariant),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            children: [
+              // Live Zoomable/Draggable OpenStreetMap Widget
+              FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: _mapPinLatLng,
+                  initialZoom: 14.0,
+                  onTap: (tapPosition, latLng) {
+                    setState(() {
+                      _mapPinLatLng = latLng;
+                      _latController.text = latLng.latitude.toStringAsFixed(5);
+                      _lngController.text = latLng.longitude.toStringAsFixed(5);
+                    });
+                  },
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  children: [
-                    // Mock Tactical Radar Map Grid Background
-                    CustomPaint(
-                      size: mapSize,
-                      painter: TacticalMapGridPainter(),
-                    ),
-
-                    // Map Overlay Guidelines
-                    Center(
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: TacticalTheme.primary.withOpacity(0.15), width: 1.0),
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.prodigal.app',
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: _mapPinLatLng,
+                        width: 32,
+                        height: 32,
+                        child: const Icon(
+                          Icons.location_pin,
+                          color: TacticalTheme.secondaryContainer,
+                          size: 32,
                         ),
                       ),
-                    ),
+                    ],
+                  ),
+                ],
+              ),
 
-                    // Map Text Info Overlay
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                        color: Colors.black.withOpacity(0.7),
-                        child: const Text(
-                          'RADAR MAP GRID 36.8°E / 1.2°S',
-                          style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 9, color: TacticalTheme.primary, fontWeight: FontWeight.bold),
+              // Live Coordinates HUD Overlay
+              Positioned(
+                bottom: 8,
+                right: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  color: Colors.black.withOpacity(0.75),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'PINPOINTED COORDS:',
+                        style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 9, color: TacticalTheme.primary, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '${_latController.text}°S, ${_lngController.text}°E',
+                        style: const TextStyle(
+                          fontFamily: 'JetBrains Mono',
+                          fontSize: 10,
+                          color: TacticalTheme.secondaryContainer,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-
-                    // Visual Map Crosshair PIN
-                    Positioned(
-                      left: _mapPinOffset.dx - 12,
-                      top: _mapPinOffset.dy - 12,
-                      child: Icon(
-                        Icons.add_location_alt,
-                        color: _mapTapped ? TacticalTheme.secondaryContainer : TacticalTheme.primary.withOpacity(0.5),
-                        size: 24,
-                      ),
-                    ),
-
-                    // Live Coordinates Overlay
-                    Positioned(
-                      bottom: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                        color: Colors.black.withOpacity(0.7),
-                        child: Text(
-                          'PIN COORDS: ${_latController.text}, ${_lngController.text}',
-                          style: TextStyle(
-                            fontFamily: 'JetBrains Mono',
-                            fontSize: 9,
-                            color: _mapTapped ? TacticalTheme.secondaryContainer : TacticalTheme.outline,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            );
-          },
+            ],
+          ),
         ),
       ],
     );
@@ -854,49 +830,4 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
       ),
     );
   }
-}
-
-// Custom Painter to draw a high-fidelity radar vector mockup background
-class TacticalMapGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint linePaint = Paint()
-      ..color = TacticalTheme.primary.withOpacity(0.08)
-      ..strokeWidth = 1.0;
-
-    final Paint borderPaint = Paint()
-      ..color = TacticalTheme.primary.withOpacity(0.2)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
-    // Draw Grid Lines (Horizontal and Vertical)
-    const double gridSize = 25.0;
-    for (double x = 0; x < size.width; x += gridSize) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
-    }
-    for (double y = 0; y < size.height; y += gridSize) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
-    }
-
-    // Draw Radar Circular rings
-    final Offset center = Offset(size.width / 2, size.height / 2);
-    canvas.drawCircle(center, 40, borderPaint);
-    canvas.drawCircle(center, 80, linePaint);
-    canvas.drawCircle(center, 120, linePaint);
-
-    // Draw Radar scan sweeps
-    final Paint sweepPaint = Paint()
-      ..color = TacticalTheme.primary.withOpacity(0.02)
-      ..style = PaintingStyle.fill;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: 120),
-      -0.5,
-      1.0,
-      true,
-      sweepPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }
