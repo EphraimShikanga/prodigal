@@ -46,8 +46,8 @@ class TacticalBottomNavBar extends StatelessWidget {
             ),
             _buildNavItem(
               index: 3,
-              icon: Icons.description,
-              label: 'Logs',
+              icon: Icons.campaign,
+              label: 'Alerts',
             ),
             _buildNavItem(
               index: 4,

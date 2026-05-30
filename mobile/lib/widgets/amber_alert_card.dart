@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import '../theme/tactical_theme.dart';
+import '../models/mock_data.dart';
 import '../screens/report_sighting_screen.dart';
 
 class AmberAlertCard extends StatelessWidget {
-  const AmberAlertCard({super.key});
+  final AmberAlertModel alert;
+
+  const AmberAlertCard({
+    super.key,
+    required this.alert,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +41,9 @@ class AmberAlertCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _buildActiveAlertBadge(),
-                    const Text(
-                      '#KE-2023-894',
-                      style: TextStyle(
+                    Text(
+                      '#${alert.id}',
+                      style: const TextStyle(
                         fontFamily: 'JetBrains Mono',
                         fontSize: 12,
                         color: TacticalTheme.outline,
@@ -54,13 +60,12 @@ class AmberAlertCard extends StatelessWidget {
                   children: [
                     // Text Details
                     Expanded(
-                      flex: 3,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Maya Lin',
-                            style: TextStyle(
+                          Text(
+                            alert.name,
+                            style: const TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
@@ -68,18 +73,18 @@ class AmberAlertCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
-                            'Age: 7   •   Ht: 4\'2"   •   Wt: 55 lbs',
-                            style: TextStyle(
+                          Text(
+                            'Age: ${alert.age}   •   Ht: ${alert.height}   •   Wt: ${alert.weight}',
+                            style: const TextStyle(
                               fontFamily: 'JetBrains Mono',
                               fontSize: 12,
                               color: TacticalTheme.onSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 12),
-                          const Text(
-                            'Last seen wearing a red jacket, blue jeans, and light up sneakers. Known to wander near wooded areas.',
-                            style: TextStyle(
+                          Text(
+                            alert.description,
+                            style: const TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 13,
                               height: 1.4,
@@ -91,41 +96,31 @@ class AmberAlertCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
 
-                    // Grayscale Image Component
-                    Expanded(
-                      flex: 2,
-                      child: AspectRatio(
-                        aspectRatio: 0.9,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: TacticalTheme.surfaceHighest,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: TacticalTheme.outlineVariant),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              // Tactical Grayscale tinted image (authentic photograph)
-                              ColorFiltered(
-                                colorFilter: const ColorFilter.matrix(<double>[
-                                  0.2126, 0.7152, 0.0722, 0, -20,
-                                  0.2126, 0.7152, 0.0722, 0, 10,
-                                  0.2126, 0.7152, 0.0722, 0, 40,
-                                  0,      0,      0,      0.8, 0,
-                                ]),
-                                child: Image.network(
-                                  'https://images.unsplash.com/photo-1502086223501-7ea6ecd79368?auto=format&fit=crop&q=80&w=400',
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Center(
-                                      child: Icon(Icons.portrait, size: 48, color: TacticalTheme.outline),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
+                    // Grayscale Image Component (Fixed size to prevent wide screen scaling overflows)
+                    Container(
+                      width: 100,
+                      height: 110,
+                      decoration: BoxDecoration(
+                        color: TacticalTheme.surfaceHighest,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: TacticalTheme.outlineVariant),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: ColorFiltered(
+                        colorFilter: const ColorFilter.matrix(<double>[
+                          0.2126, 0.7152, 0.0722, 0, -20,
+                          0.2126, 0.7152, 0.0722, 0, 10,
+                          0.2126, 0.7152, 0.0722, 0, 40,
+                          0,      0,      0,      0.8, 0,
+                        ]),
+                        child: Image.network(
+                          alert.photoUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Center(
+                              child: Icon(Icons.portrait, size: 40, color: TacticalTheme.outline),
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -159,7 +154,7 @@ class AmberAlertCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'Nairobi National Park Perimeter',
+                              alert.lastSeenLocation,
                               style: TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 13,
@@ -170,9 +165,9 @@ class AmberAlertCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 2),
-                        const Text(
-                          '1.3733° S, 36.8583° E',
-                          style: TextStyle(
+                        Text(
+                          alert.coordinates,
+                          style: const TextStyle(
                             fontFamily: 'JetBrains Mono',
                             fontSize: 11,
                             color: TacticalTheme.onSurfaceVariant,
@@ -194,16 +189,16 @@ class AmberAlertCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Row(
-                          children: const [
-                            Icon(
+                          children: [
+                            const Icon(
                               Icons.schedule,
                               size: 14,
                               color: TacticalTheme.secondaryContainer,
                             ),
-                            SizedBox(width: 4),
+                            const SizedBox(width: 4),
                             Text(
-                              '04:12:38',
-                              style: TextStyle(
+                              alert.timeElapsed,
+                              style: const TextStyle(
                                 fontFamily: 'JetBrains Mono',
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,

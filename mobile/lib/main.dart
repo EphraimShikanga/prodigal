@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'theme/tactical_theme.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/report_missing_screen.dart';
+import 'screens/alerts_list_screen.dart';
 import 'widgets/bottom_nav_bar.dart';
 
 void main() {
@@ -39,12 +40,14 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
   void initState() {
     super.initState();
     _screens = [
-      const DashboardScreen(),
+      DashboardScreen(
+        onViewAllAlertsTap: () => _onTabTapped(3),
+      ),
       const RadarPlaceholder(),
       ReportMissingScreen(
         onBackToHome: () => _onTabTapped(0),
       ),
-      const ReportsPlaceholder(),
+      const AlertsListScreen(),
       const ProfilePlaceholder(),
     ];
   }

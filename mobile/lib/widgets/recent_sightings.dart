@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import '../theme/tactical_theme.dart';
+import '../models/mock_data.dart';
 
 class RecentSightingsFeed extends StatefulWidget {
-  const RecentSightingsFeed({super.key});
+  final List<SightingModel> sightings;
+
+  const RecentSightingsFeed({
+    super.key,
+    required this.sightings,
+  });
 
   @override
   State<RecentSightingsFeed> createState() => _RecentSightingsFeedState();
@@ -81,39 +87,57 @@ class _RecentSightingsFeedState extends State<RecentSightingsFeed>
         ),
         const SizedBox(height: 8),
         Container(
+          width: double.infinity,
           decoration: BoxDecoration(
             color: const Color(0xFF121212),
             border: Border.all(color: Colors.white.withOpacity(0.1)),
             borderRadius: BorderRadius.circular(4),
           ),
           padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              _buildSightingItem(
-                type: 'UNVERIFIED_MATCH',
-                typeColor: TacticalTheme.secondaryContainer,
-                time: 'T-14 MINS',
-                description: 'Traffic Cam #402, Ngong Road. Partial facial match (62%).',
-                borderColor: TacticalTheme.secondaryContainer,
-              ),
-              const SizedBox(height: 8),
-              _buildSightingItem(
-                type: 'USER_REPORT',
-                typeColor: TacticalTheme.outline,
-                time: 'T-38 MINS',
-                description: 'Citizen reported seeing child matching description at local market.',
-                borderColor: TacticalTheme.outlineVariant,
-              ),
-              const SizedBox(height: 8),
-              _buildSightingItem(
-                type: 'VERIFIED_TRACK',
-                typeColor: TacticalTheme.primary,
-                time: 'T-52 MINS',
-                description: 'CCTV feed confirmed direction of travel North-West.',
-                borderColor: TacticalTheme.primary,
-              ),
-            ],
-          ),
+          child: widget.sightings.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16.0),
+                  child: Center(
+                    child: Text(
+                      'NO ACTIVE SIGHTINGS LOGGED',
+                      style: TextStyle(
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: 11,
+                        color: TacticalTheme.outline,
+                      ),
+                    ),
+                  ),
+                )
+              : ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: widget.sightings.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final sighting = widget.sightings[index];
+                    Color severityColor;
+                    Color borderColor;
+
+                    if (sighting.severity == 'VERIFIED') {
+                      severityColor = TacticalTheme.primary;
+                      borderColor = TacticalTheme.primary;
+                    } else if (sighting.severity == 'USER_REPORT') {
+                      severityColor = TacticalTheme.outline;
+                      borderColor = TacticalTheme.outlineVariant;
+                    } else {
+                      severityColor = TacticalTheme.secondaryContainer;
+                      borderColor = TacticalTheme.secondaryContainer;
+                    }
+
+                    return _buildSightingItem(
+                      type: sighting.type,
+                      typeColor: severityColor,
+                      time: sighting.time,
+                      description: sighting.description,
+                      borderColor: borderColor,
+                    );
+                  },
+                ),
         ),
       ],
     );
