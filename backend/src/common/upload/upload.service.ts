@@ -9,7 +9,7 @@ export class UploadService {
     return {
       storage: diskStorage({
         destination: './uploads',
-        filename: (req, file, callback) => {
+        filename: (req: any, file: Express.Multer.File, callback: (error: Error | null, filename: string) => void) => {
           const uniqueSuffix = uuidv4();
           const ext = extname(file.originalname);
           callback(null, `${uniqueSuffix}${ext}`);
