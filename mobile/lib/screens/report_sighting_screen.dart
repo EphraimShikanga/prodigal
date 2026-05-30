@@ -2,10 +2,16 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../theme/tactical_theme.dart';
 
 class ReportSightingScreen extends StatefulWidget {
-  const ReportSightingScreen({super.key});
+  final String? caseId;
+
+  const ReportSightingScreen({super.key, this.caseId});
 
   @override
   State<ReportSightingScreen> createState() => _ReportSightingScreenState();
@@ -22,13 +28,17 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
   final _latController = TextEditingController();
   final _lngController = TextEditingController();
   final _timeController = TextEditingController();
+  final _reporterNameController = TextEditingController();
+  final _reporterPhoneController = TextEditingController();
 
-  // Media Mock State
+  // File Upload State
   String _photoFileName = "No file chosen";
+  String? _photoUploadUrl;
+  bool _isUploadingPhoto = false;
+
   String _audioFileName = "No file chosen";
-  bool _isRecordingAudio = false;
-  int _recordDuration = 0;
-  Timer? _recordTimer;
+  String? _audioUploadUrl;
+  bool _isUploadingAudio = false;
 
   // Auto-captured location (simulated device coordinates)
   final double _autoLat = -1.3733;
@@ -56,41 +66,15 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
     _latController.dispose();
     _lngController.dispose();
     _timeController.dispose();
+    _reporterNameController.dispose();
+    _reporterPhoneController.dispose();
     _mapController.dispose();
-    _recordTimer?.cancel();
     super.dispose();
   }
 
   String _formatDateTime(DateTime dt) {
     return "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} "
         "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}";
-  }
-
-  void _toggleAudioRecording() {
-    if (_isRecordingAudio) {
-      _recordTimer?.cancel();
-      setState(() {
-        _isRecordingAudio = false;
-        _audioFileName = "audio_tip_${_recordDuration}s.wav";
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Audio clip recorded: $_audioFileName'),
-          backgroundColor: TacticalTheme.surfaceContainer,
-        ),
-      );
-    } else {
-      setState(() {
-        _isRecordingAudio = true;
-        _recordDuration = 0;
-        _audioFileName = "No file chosen";
-      });
-      _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        setState(() {
-          _recordDuration++;
-        });
-      });
-    }
   }
 
   // Pick Date & Time via system pickers
@@ -149,7 +133,167 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
     }
   }
 
-  void _submitSighting() {
+  // Upload file helper
+  Future<String> _uploadFileToBackend(String filePath, String fileName) async {
+    const String uploadUrl = 'http://10.0.2.2:3000/cases/upload';
+    final request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'file',
+        filePath,
+        filename: fileName,
+      ),
+    );
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final Map<String, dynamic> data = jsonDecode(response.body);
+      final String relativeUrl = data['url'];
+      return 'http://10.0.2.2:3000$relativeUrl';
+    } else {
+      throw Exception('Server returned status ${response.statusCode}: ${response.body}');
+    }
+  }
+
+  // Sighting Photo picker camera/gallery choice
+  Future<void> _pickPhoto(ImageSource source) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        imageQuality: 85,
+      );
+      if (image == null) return;
+
+      setState(() {
+        _photoFileName = image.name;
+        _isUploadingPhoto = true;
+        _photoUploadUrl = null;
+      });
+
+      final url = await _uploadFileToBackend(image.path, image.name);
+      setState(() {
+        _photoUploadUrl = url;
+        _isUploadingPhoto = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sighting photo uploaded: ${image.name}'),
+          backgroundColor: TacticalTheme.successGreen,
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        _isUploadingPhoto = false;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to upload sighting photo: $e'),
+          backgroundColor: TacticalTheme.error,
+        ),
+      );
+    }
+  }
+
+  void _showPhotoSourceSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: TacticalTheme.surfaceContainer,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(8),
+          topRight: Radius.circular(8),
+        ),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'SELECT SIGHTING PHOTO SOURCE',
+                style: TextStyle(
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: TacticalTheme.outline,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.camera_alt, color: TacticalTheme.primary),
+                title: const Text('Camera', style: TextStyle(fontFamily: 'Inter')),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _pickPhoto(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: TacticalTheme.primary),
+                title: const Text('Gallery', style: TextStyle(fontFamily: 'Inter')),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _pickPhoto(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Sighting Audio file picker
+  Future<void> _pickAudioFile() async {
+    try {
+      final FilePickerResult? result = await FilePicker.pickFiles(
+        type: FileType.audio,
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final file = result.files.first;
+      if (file.path == null) return;
+
+      setState(() {
+        _audioFileName = file.name;
+        _isUploadingAudio = true;
+        _audioUploadUrl = null;
+      });
+
+      final url = await _uploadFileToBackend(file.path!, file.name);
+      setState(() {
+        _audioUploadUrl = url;
+        _isUploadingAudio = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Audio file uploaded: ${file.name}'),
+          backgroundColor: TacticalTheme.successGreen,
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        _isUploadingAudio = false;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to upload audio: $e'),
+          backgroundColor: TacticalTheme.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _submitSighting() async {
     if (_descriptionController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -160,54 +304,184 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
       return;
     }
 
-    final double lat = _isImmediate ? _autoLat : (double.tryParse(_latController.text) ?? 0.0);
-    final double lng = _isImmediate ? _autoLng : (double.tryParse(_lngController.text) ?? 0.0);
-    final String timestamp = _isImmediate ? _autoTime.toIso8601String() : _timeController.text;
+    if (_photoUploadUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select and upload a sighting photo first (mandatory for ML matching verification).'),
+          backgroundColor: TacticalTheme.errorContainer,
+        ),
+      );
+      return;
+    }
 
+    // 1. Show loading progress indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          backgroundColor: TacticalTheme.surfaceContainer,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(4),
+            side: const BorderSide(color: TacticalTheme.outlineVariant),
+          ),
+          content: Row(
+            children: const [
+              CircularProgressIndicator(color: TacticalTheme.primary),
+              SizedBox(width: 20),
+              Expanded(
+                child: Text(
+                  'SYNCING SIGHTING TIP...',
+                  style: TextStyle(
+                    fontFamily: 'JetBrains Mono',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: TacticalTheme.onSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final double lat = _isImmediate ? _autoLat : (double.tryParse(_latController.text) ?? 0.0);
+      final double lng = _isImmediate ? _autoLng : (double.tryParse(_lngController.text) ?? 0.0);
+
+      final Map<String, dynamic> payload = {
+        "case_id": widget.caseId,
+        "latitude": lat,
+        "longitude": lng,
+        "location_description": _isImmediate ? "Auto-Telemetry Location" : _locationNameController.text.trim(),
+        "photo_url": _photoUploadUrl,
+        "audio_url": _audioUploadUrl,
+        "reporter_name": _reporterNameController.text.trim().isEmpty ? null : _reporterNameController.text.trim(),
+        "reporter_phone": _reporterPhoneController.text.trim().isEmpty ? null : _reporterPhoneController.text.trim()
+      };
+
+      const String backendUrl = 'http://10.0.2.2:3000/sightings';
+      
+      final response = await http.post(
+        Uri.parse(backendUrl),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(payload),
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Dismiss loading
+
+      if (response.statusCode == 201) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final String sightingId = responseData['id'] ?? 'N/A';
+        final String status = responseData['status'] ?? 'PENDING';
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: TacticalTheme.surfaceContainer,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(4),
+              side: const BorderSide(color: TacticalTheme.outlineVariant),
+            ),
+            title: Row(
+              children: const [
+                Icon(Icons.radar, color: TacticalTheme.secondaryContainer),
+                SizedBox(width: 12),
+                Text(
+                  'SIGHTING REGISTERED',
+                  style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 16),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Sighting tip successfully transmitted and committed to Neon cloud database!',
+                  style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: TacticalTheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 12),
+                _buildDialogParam('SIGHTING ID', sightingId),
+                _buildDialogParam('COORDINATES', '$lat, $lng'),
+                _buildDialogParam('STATUS', status),
+                _buildDialogParam('REPORTER', _reporterNameController.text.trim().isEmpty ? "Anonymous Citizen" : _reporterNameController.text.trim()),
+                if (_audioUploadUrl != null)
+                  _buildDialogParam('AUDIO LINK', 'Uploaded wav file'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // Dismiss dialogue
+                  Navigator.of(context).pop(); // Back to Home
+                },
+                child: const Text(
+                  'DISMISS',
+                  style: TextStyle(fontFamily: 'JetBrains Mono', color: TacticalTheme.primary),
+                ),
+              ),
+            ],
+          ),
+        );
+      } else {
+        _showErrorDialog(
+          'SERVER ERROR (${response.statusCode})',
+          'Failed to record sighting on server. Details:\n\n${response.body}',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      _showErrorDialog(
+        'CONNECTION ERROR',
+        'Could not establish link with server at http://10.0.2.2:3000.\n\nMake sure the backend is running.\n\nDetail: $e',
+      );
+    }
+  }
+
+  void _showErrorDialog(String title, String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: TacticalTheme.surfaceContainer,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(4),
-          side: const BorderSide(color: TacticalTheme.outlineVariant),
+          side: const BorderSide(color: TacticalTheme.error),
         ),
         title: Row(
-          children: const [
-            Icon(Icons.radar, color: TacticalTheme.secondaryContainer),
-            SizedBox(width: 12),
+          children: [
+            const Icon(Icons.error_outline, color: TacticalTheme.error),
+            const SizedBox(width: 12),
             Text(
-              'SIGHTING REGISTERED',
-              style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 16),
+              title,
+              style: const TextStyle(
+                fontFamily: 'JetBrains Mono',
+                fontSize: 16,
+                color: TacticalTheme.error,
+              ),
             ),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Your anonymous sighting tip has been filed under moderate review:',
-              style: TextStyle(fontFamily: 'Inter', fontSize: 13, color: TacticalTheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 12),
-            _buildDialogParam('COORDINATES', '$lat, $lng'),
-            _buildDialogParam('TIMESTAMP', timestamp),
-            _buildDialogParam('PHOTO ATTACHED', _photoFileName == "No file chosen" ? "None (Optional)" : _photoFileName),
-            if (_audioFileName != "No file chosen")
-              _buildDialogParam('AUDIO NOTE', _audioFileName),
-            _buildDialogParam('DESCRIPTION', _descriptionController.text),
-          ],
+        content: Text(
+          message,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            color: TacticalTheme.onSurfaceVariant,
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.of(context).pop(); // Dismiss Dialog
-              Navigator.of(context).pop(); // Back to Dashboard
-            },
+            onPressed: () => Navigator.of(context).pop(),
             child: const Text(
               'DISMISS',
-              style: TextStyle(fontFamily: 'JetBrains Mono', color: TacticalTheme.primary),
+              style: TextStyle(fontFamily: 'JetBrains Mono', color: TacticalTheme.error),
             ),
           ),
         ],
@@ -296,7 +570,6 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Title section
                     const Text(
                       'Submit Sighting Report',
                       style: TextStyle(
@@ -317,38 +590,55 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Toggle Button Mode (Immediate vs Past)
                     _buildModeToggle(),
                     const SizedBox(height: 20),
 
-                    // Location / Time dynamic inputs based on mode
                     if (_isImmediate) _buildImmediateTelemetry() else _buildPastManualFields(),
 
                     const SizedBox(height: 20),
 
-                    // Media upload sections
-                    _buildLabel('1. SIGHTING PHOTO (OPTIONAL)'),
+                    _buildLabel('1. SIGHTING PHOTO (MANDATORY)'),
                     _buildPhotoUploader(),
                     const SizedBox(height: 20),
 
                     _buildLabel('2. AUDIO VOICE NOTE (OPTIONAL)'),
-                    _buildAudioRecorder(),
+                    _buildAudioUploader(),
                     const SizedBox(height: 20),
 
-                    // Sighting description details
-                    _buildLabel('3. SIGHTING DETAILS / OBSERVATIONS'),
+                    _buildLabel('3. SIGHTING DETAILS / OBSERVATIONS *'),
                     TextFormField(
                       controller: _descriptionController,
                       maxLines: 4,
                       style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: TacticalTheme.onSurface),
                       decoration: _buildInputDecoration(
-                        'Describe what the child was wearing, direction they were heading, physical state, or anyone they were with...',
+                        'Describe clothing, direction traveling, physical state...',
                       ),
                     ),
+                    const SizedBox(height: 20),
 
+                    _buildLabel('4. CONTACT DETAILS (OPTIONAL / LEAVE EMPTY TO BE ANONYMOUS)'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _reporterNameController,
+                            style: const TextStyle(fontFamily: 'Inter', fontSize: 13, color: TacticalTheme.onSurface),
+                            decoration: _buildInputDecoration('Your Name'),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _reporterPhoneController,
+                            keyboardType: TextInputType.phone,
+                            style: const TextStyle(fontFamily: 'JetBrains Mono', fontSize: 13, color: TacticalTheme.onSurface),
+                            decoration: _buildInputDecoration('Your Phone'),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 28),
 
-                    // Submit Button
                     SizedBox(
                       width: double.infinity,
                       height: 45,
@@ -383,7 +673,6 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
     );
   }
 
-  // Toggle Mode Selection
   Widget _buildModeToggle() {
     return Container(
       decoration: BoxDecoration(
@@ -458,7 +747,6 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
     );
   }
 
-  // Automatic Immediate Mode telemetry display
   Widget _buildImmediateTelemetry() {
     return Container(
       width: double.infinity,
@@ -515,12 +803,10 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
     );
   }
 
-  // Manual Past Mode inputs with live zoomable Map Picker
   Widget _buildPastManualFields() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Sighting Time input with system Date/Time Picker
         _buildLabel('SIGHTING DATE & TIME'),
         TextFormField(
           controller: _timeController,
@@ -533,7 +819,6 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Sighting Location Description input
         _buildLabel('LOCATION / CORNER DESCRIPTION'),
         TextFormField(
           controller: _locationNameController,
@@ -542,7 +827,6 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
         ),
         const SizedBox(height: 16),
 
-        // INTERACTIVE MAP PICKER COMPONENT (OpenStreetMap Live View)
         _buildLabel('SELECT SIGHTING LOCATION (TAP MAP TO PINPOINT)'),
         Container(
           height: 200,
@@ -553,7 +837,6 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
           clipBehavior: Clip.antiAlias,
           child: Stack(
             children: [
-              // Live Zoomable/Draggable OpenStreetMap Widget
               FlutterMap(
                 mapController: _mapController,
                 options: MapOptions(
@@ -588,8 +871,6 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
                   ),
                 ],
               ),
-
-              // Live Coordinates HUD Overlay
               Positioned(
                 bottom: 8,
                 right: 8,
@@ -624,26 +905,15 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
     );
   }
 
-  // Photo Uploader Box (Optional)
   Widget _buildPhotoUploader() {
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _photoFileName = "sighting_snap_nairobi.jpg";
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Selected optional photo: sighting_snap_nairobi.jpg'),
-            backgroundColor: TacticalTheme.surfaceContainer,
-          ),
-        );
-      },
+      onTap: _isUploadingPhoto ? null : _showPhotoSourceSheet,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: TacticalTheme.surfaceLowest,
-          border: Border.all(color: TacticalTheme.outlineVariant),
+          border: Border.all(color: _photoUploadUrl != null ? TacticalTheme.successGreen : TacticalTheme.outlineVariant),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Row(
@@ -652,7 +922,11 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
             Expanded(
               child: Row(
                 children: [
-                  const Icon(Icons.add_a_photo, size: 20, color: TacticalTheme.onSurfaceVariant),
+                  Icon(
+                    _photoUploadUrl != null ? Icons.photo : Icons.add_a_photo,
+                    size: 20,
+                    color: _photoUploadUrl != null ? TacticalTheme.successGreen : TacticalTheme.onSurfaceVariant,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -661,137 +935,112 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 12,
-                        color: _photoFileName == "No file chosen" ? TacticalTheme.onSurfaceVariant : TacticalTheme.successGreen,
+                        color: _photoUploadUrl != null ? TacticalTheme.successGreen : TacticalTheme.onSurfaceVariant,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: TacticalTheme.surfaceHigh,
-                foregroundColor: TacticalTheme.onSurface,
-                elevation: 0,
-                side: const BorderSide(color: TacticalTheme.outlineVariant),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
+            if (_isUploadingPhoto)
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(color: TacticalTheme.primary, strokeWidth: 2),
+              )
+            else if (_photoUploadUrl != null)
+              const Icon(Icons.check_circle, size: 22, color: TacticalTheme.successGreen)
+            else
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: TacticalTheme.surfaceHigh,
+                  foregroundColor: TacticalTheme.onSurface,
+                  elevation: 0,
+                  side: const BorderSide(color: TacticalTheme.outlineVariant),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
+                ),
+                onPressed: _showPhotoSourceSheet,
+                icon: const Icon(Icons.photo_library, size: 14),
+                label: const Text(
+                  'CHOOSE',
+                  style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 10, fontWeight: FontWeight.bold),
+                ),
               ),
-              onPressed: () {
-                setState(() {
-                  _photoFileName = "sighting_snap_nairobi.jpg";
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Camera snapped: sighting_snap_nairobi.jpg'),
-                    backgroundColor: TacticalTheme.surfaceContainer,
-                  ),
-                );
-              },
-              icon: const Icon(Icons.photo_library, size: 14),
-              label: const Text(
-                'BROWSE',
-                style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 10, fontWeight: FontWeight.bold),
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  // Audio Recorder controller
-  Widget _buildAudioRecorder() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: TacticalTheme.surfaceLowest,
-        border: Border.all(color: TacticalTheme.outlineVariant),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
+  Widget _buildAudioUploader() {
+    return GestureDetector(
+      onTap: _isUploadingAudio ? null : _pickAudioFile,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: TacticalTheme.surfaceLowest,
+          border: Border.all(color: _audioUploadUrl != null ? TacticalTheme.successGreen : TacticalTheme.outlineVariant),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Row(
                 children: [
                   Icon(
-                    _isRecordingAudio ? Icons.mic : Icons.volume_up,
-                    size: 16,
-                    color: _isRecordingAudio ? TacticalTheme.error : TacticalTheme.onSurfaceVariant,
+                    _audioUploadUrl != null ? Icons.audiotrack : Icons.volume_up,
+                    size: 20,
+                    color: _audioUploadUrl != null ? TacticalTheme.successGreen : TacticalTheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    _isRecordingAudio ? 'Recording voice note...' : _audioFileName,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      color: _isRecordingAudio ? TacticalTheme.error : TacticalTheme.onSurfaceVariant,
+                  Expanded(
+                    child: Text(
+                      _audioFileName,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        color: _audioUploadUrl != null ? TacticalTheme.successGreen : TacticalTheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ],
               ),
-              GestureDetector(
-                onTap: _toggleAudioRecording,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: _isRecordingAudio ? TacticalTheme.errorContainer : TacticalTheme.surfaceHigh,
-                    border: Border.all(color: _isRecordingAudio ? TacticalTheme.error : TacticalTheme.outlineVariant),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        _isRecordingAudio ? Icons.stop : Icons.fiber_manual_record,
-                        size: 12,
-                        color: _isRecordingAudio ? Colors.white : TacticalTheme.error,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        _isRecordingAudio ? 'STOP (${_recordDuration}s)' : 'RECORD',
-                        style: TextStyle(
-                          fontFamily: 'JetBrains Mono',
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: _isRecordingAudio ? Colors.white : TacticalTheme.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
+            ),
+            if (_isUploadingAudio)
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(color: TacticalTheme.primary, strokeWidth: 2),
+              )
+            else if (_audioUploadUrl != null)
+              const Icon(Icons.check_circle, size: 22, color: TacticalTheme.successGreen)
+            else
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: TacticalTheme.surfaceHigh,
+                  foregroundColor: TacticalTheme.onSurface,
+                  elevation: 0,
+                  side: const BorderSide(color: TacticalTheme.outlineVariant),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
+                ),
+                onPressed: _pickAudioFile,
+                icon: const Icon(Icons.audiotrack, size: 14),
+                label: const Text(
+                  'CHOOSE',
+                  style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 10, fontWeight: FontWeight.bold),
                 ),
               ),
-            ],
-          ),
-          if (_isRecordingAudio) ...[
-            const SizedBox(height: 10),
-            // Mock Audio Waveform
-            SizedBox(
-              height: 16,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(15, (index) {
-                  final height = 4.0 + (index % 3 == 0 ? 10.0 : (index % 2 == 0 ? 6.0 : 2.0));
-                  return Container(
-                    width: 3,
-                    height: height,
-                    margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                    color: TacticalTheme.error,
-                  );
-                }),
-              ),
-            ),
-          ]
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  // Helpers
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6.0, top: 4.0),
@@ -800,7 +1049,7 @@ class _ReportSightingScreenState extends State<ReportSightingScreen> {
         style: const TextStyle(
           fontFamily: 'JetBrains Mono',
           fontSize: 10,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.bold,
           color: TacticalTheme.onSurfaceVariant,
           letterSpacing: 0.5,
         ),

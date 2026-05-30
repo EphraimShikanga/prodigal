@@ -2,9 +2,21 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import * as express from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 
 async function bootstrap() {
+  // Ensure uploads folder exists
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+  }
+
   const app = await NestFactory.create(AppModule);
+
+  // Serve uploads statically
+  app.use('/uploads', express.static(uploadsDir));
 
   // Global validation pipe for inputs
   app.useGlobalPipes(
